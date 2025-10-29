@@ -1,0 +1,68 @@
+{
+  "faqs": [
+    {
+      "id": "balance_inquiry",
+      "question": "How do I check my student account balance?",
+      "answer": "You can check your balance in three ways:\n1. Log into the Student Accounting Portal at [link]\n2. Call the Cashier's Office at [phone]\n3. Email cashier@unc.edu with your student ID\n\nYour balance updates daily.",
+      "category": "account_management",
+      "keywords": ["balance", "owe", "charges", "total", "account balance"],
+      "sources": ["billing_procedures_2025.pdf"]
+    },
+    {
+      "id": "payment_methods",
+      "question": "What payment methods do you accept?",
+      "answer": "We accept multiple payment methods:\n- Credit/Debit cards (Visa, Mastercard, Discover, Amex)\n- Bank transfers (ACH)\n- Wire transfers\n- Checks (mail to [address])\n\nAll methods process within 2-3 business days.",
+      "category": "payments",
+      "keywords": ["payment method", "accept", "credit card", "debit card", "pay", "payment"],
+      "sources": ["payment_policy_2025.pdf"]
+    },
+    {
+      "id": "financial_hold",
+      "question": "Why do I have a financial hold on my account?",
+      "answer": "Common reasons for holds:\n- Outstanding balance (payment due)\n- Overdue library fines\n- Parking violations\n\nTo resolve: Contact cashier@unc.edu dabei: [location]",
+      "category": "holds",
+      "keywords": ["hold", "blocked", "cannot register", "registration blocked"],
+      "sources": ["financial_policy_2025.pdf"]
+    },
+    {
+      "id": "processing_time",
+      "question": "How long does it take for payments to process?",
+      "answer": "Payment processing times vary by method:\n- Credit/Debit cards: 1-2 business days\n- ACH/Bank transfers: 2-3 business days\n- Wire transfers: 1 business day\n- Checks: 3-5 business days\n\nYour account will update once processing is complete.",
+      "category": "payments",
+      "keywords": ["processing time", "how long", "when will", "payment clear"],
+      "sources": ["payment_policy_2025.pdf"]
+    },
+    {
+      "id": "payment_plan",
+      "question": "How do I set up a payment plan?",
+      "answer": "To set up a payment plan:\n1. Contact the Cashier's Office at cashier@unc.edu\n2. Provide your student ID and semester details\n3. Discuss available payment plan options\n\nPayment plans are typically available for balances over $500.",
+      "category": "payment_plans",
+      "keywords": ["payment plan", "installment", "monthly payments", "payment arrangement"],
+      "sources": ["payment_plan_policy_2025.pdf"]
+    },
+    {
+      "id": "due_date",
+      "question": "When is my payment due?",
+      "answer": "Payment due dates vary by semester. To find your specific due date:\n1. Check your bill in the Student Accounting Portal\n2. Review your student account statement\n3. Contact cashier@uncibilidade if you have questions\n\nLate payments may result in holds or late fees.",
+      "category": "deadlines",
+      "keywords": ["due date", "when due", "deadline", "payment deadline"],
+      "sources": ["billing_procedures_2025.pdf"]
+    },
+    {
+      "id": "refund_policy",
+      "question": "How do I get a refund?",
+      "answer": "Refund policies depend on the situation:\n- Overpayments: Typically refunded within 10-14 business days\n- Withdrawals: Prorated based on withdrawal date\n- Financial aid: Handled by Financial Aid Office\n\nContact cashier@unc.edu for specific refund inquiries.",
+      "category": "refunds",
+      "keywords": ["refund", "overpayment", "money back"],
+      "sources": ["refund_policy_2025.pdf"]
+    },
+    {
+      "id": "1098t_form",
+      "question": "Where can I get my 1098-T tax form?",
+      "answer": "Your 1098-T form is available in the Student Accounting Portal.\n1. Log into the portal\n2. Navigate to 'Tax Information'\n3. Download your 1098-T form\n\nForms are typically available by late January. Contact cashier@unc.edu if you need assistance.",
+      "category": "taxes",
+      "keywords": ["1098t", "tax form", "1098-t"],
+      "sources": ["tax_information_guide_2025.pdf"]
+    }
+  ]
+}

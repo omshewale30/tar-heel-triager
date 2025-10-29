@@ -1,0 +1,28 @@
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Azure services
+azure-identity==1.15.0
+azure-ai-projects==1.0.0  # Update version based on actual package
+msgraph-sdk==1.0.0  # Microsoft Graph SDK
+
+# Database
+sqlalchemy==2.0.23
+
+# OpenAI
+openai==1.3.5
+
+# Environment and utilities
+python-dotenv==1.0.0
+
+# HTTP client for scheduler
+httpx==0.25.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Optional: For production deployment
+gunicorn==21.2.0
