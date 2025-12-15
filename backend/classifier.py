@@ -4,7 +4,7 @@ Classifies student billing emails and determines if they're FAQ-eligible
 """
 import json
 import os
-from typing import Dict
+from typing import Dict, Optional
 import openai
 from dotenv import load_dotenv
 

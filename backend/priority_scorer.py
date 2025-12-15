@@ -27,7 +27,7 @@ class PriorityScorer:
     # Sentiment keywords (negative sentiment = higher priority)
     NEGATIVE_SENTIMENT = [
         'angry', 'frustrated', 'disappointed', 'concerned',
-        'worried', 'upset', 'unacceptable', miles', 'ridiculous',
+        'worried', 'upset', 'unacceptable', 'miles', 'ridiculous',
         'unfair', 'discrimination', 'complaint'
     ]
     

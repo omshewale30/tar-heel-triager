@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react';
 import ApprovalPanel from '../components/ApprovalPanel';
+import ProtectedRoute from '../components/ProtectedRoute';
+import Header from '../components/Header';
+import { useMsal } from '@azure/msal-react';
 
-export default function Dashboard() {
+function DashboardContent() {
+  const { instance, accounts } = useMsal();
   const [pendingEmails, setPendingEmails] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [filterRoute, setFilterRoute] = useState('all');
+  const [fetchingEmails, setFetchingEmails] = useState(false);
+  const [fetchStatus, setFetchStatus] = useState(null);
 
   useEffect(() => {
     fetchPendingEmails();
@@ -54,28 +60,128 @@ export default function Dashboard() {
     setSelectedEmail(null);
   };
 
+  const handleFetchEmails = async () => {
+    setFetchingEmails(true);
+    setFetchStatus(null);
+    
+    try {
+ 
+      const graphScopes = ['https://graph.microsoft.com/Mail.Read'];
+      
+      const tokenResponse = await instance.acquireTokenSilent({
+        scopes: graphScopes,
+        account: accounts[0]
+      });
+      
+      const accessToken = tokenResponse.accessToken;
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/fetch-user-emails`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          access_token: accessToken,
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setFetchStatus({
+          type: 'success',
+          message: `✓ Found ${data.email_count} unread email(s)`,
+          emails: data.emails
+        });
+      } else {
+        const error = await response.json();
+        setFetchStatus({
+          type: 'error',
+          message: `✗ Error: ${error.detail || 'Failed to fetch emails'}`
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching emails:', error);
+      setFetchStatus({
+        type: 'error',
+        message: `✗ Error: ${error.message}`
+      });
+    } finally {
+      setFetchingEmails(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <header className="bg-white shadow-md border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-5">
+      <Header />
+      
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-                UNC Cashier Email Triage
-              </h1>
-              <p className="text-sm text-gray-600 mt-1.5">
-                Review and approve email responses
-              </p>
+              <h2 className="text-2xl font-bold text-gray-900">Email Triage Dashboard</h2>
+              <p className="text-sm text-gray-600 mt-1">Review and approve email responses</p>
             </div>
-            <div className="text-right">
-              <div className="text-xs text-gray-500 mb-1">Pending Emails</div>
-              <div className="text-2xl font-bold text-blue-600">
-                {pendingEmails.length}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleFetchEmails}
+                disabled={fetchingEmails}
+                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                  fetchingEmails
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
+                }`}
+              >
+                {fetchingEmails ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Fetching...
+                  </span>
+                ) : (
+                  '📧 Fetch My Emails'
+                )}
+              </button>
+              <div className="text-right">
+                <div className="text-xs text-gray-500 mb-1">Pending Emails</div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {pendingEmails.length}
+                </div>
               </div>
             </div>
           </div>
+          
+          {/* Fetch Status Message */}
+          {fetchStatus && (
+            <div className={`mt-3 p-3 rounded-lg ${
+              fetchStatus.type === 'success' 
+                ? 'bg-green-50 border border-green-200' 
+                : 'bg-red-50 border border-red-200'
+            }`}>
+              <p className={`text-sm font-medium ${
+                fetchStatus.type === 'success' ? 'text-green-800' : 'text-red-800'
+              }`}>
+                {fetchStatus.message}
+              </p>
+              {fetchStatus.emails && fetchStatus.emails.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {fetchStatus.emails.slice(0, 3).map((email, idx) => (
+                    <div key={idx} className="text-xs text-green-700">
+                      • {email.subject} - from {email.sender_email}
+                    </div>
+                  ))}
+                  {fetchStatus.emails.length > 3 && (
+                    <div className="text-xs text-green-600 italic">
+                      ...and {fetchStatus.emails.length - 3} more
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </header>
+      </div>
 
       <main className="max-w-7xl mx-auto p-6 pb-8">
         <div className="grid grid-cols-3 gap-6">
@@ -263,5 +369,14 @@ export default function Dashboard() {
         </div>
       </main>
     </div>
+  );
+}
+
+
+export default function Dashboard() {
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
+    </ProtectedRoute>
   );
 }

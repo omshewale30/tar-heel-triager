@@ -8,6 +8,11 @@ from datetime import datetime
 import os
 from msgraph import GraphServiceClient
 from azure.identity import DefaultAzureCredential
+from dotenv import load_dotenv
+from azure.identity import ClientSecretCredential
+import asyncio
+
+
 
 
 @dataclass
@@ -28,7 +33,7 @@ class EmailReader:
     def __init__(self, client: Optional[GraphServiceClient] = None):
         """
         Initialize email reader with Microsoft Graph client.
-        Uses DefaultAzureCredential for authentication.
+        Uses Azure AD for authentication.
         """
         if client is None:
             credential = DefaultAzureCredential()
@@ -177,3 +182,9 @@ class EmailReader:
             return msg.body.content
         
         return ""
+
+
+if __name__ == "__main__":
+    reader = EmailReader()
+    emails = asyncio.run(reader.get_unread_emails())
+    print(emails)

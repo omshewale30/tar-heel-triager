@@ -27,6 +27,8 @@ wheels/
 .env
 .env.local
 .env.*.local
+.cursor/
+/backend/env_files
 
 # Database
 *.db

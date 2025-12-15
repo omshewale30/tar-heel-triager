@@ -2,28 +2,48 @@
 FastAPI Backend for UNC Cashier Email Triage
 Main triage endpoint and API routes
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+import httpx
+from contextlib import asynccontextmanager
 
 # Import our modules
 from email_reader import EmailReader
 from classifier import EmailClassifier
 from priority_scorer import PriorityScorer
 from agent_handler import agent
+from fastapi.middleware.cors import CORSMiddleware
 from models import ApprovalQueue, db
 
 load_dotenv()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.http_client = httpx.AsyncClient(timeout=10.0)
+    yield
+    await app.state.http_client.aclose()
+
 app = FastAPI(
     title="UNC Cashier Email Triage API",
     description="Email triage and response system for UNC Cashier's Office",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+security = HTTPBearer()
 # Initialize services
 email_reader = EmailReader()
 classifier = EmailClassifier()
@@ -229,6 +249,70 @@ async def get_approval_queue(route_filter: str = "all"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/fetch-user-emails")
+async def fetch_user_emails(request: dict):
+    """
+    Fetch emails from the authenticated user's mailbox using their access token
+    This uses delegated permissions (Mail.Read) - the user's token allows reading their own emails
+    
+    Args:
+        request: { "access_token": "user's access token from MSAL" }
+    """
+    try:
+        access_token = request.get('access_token')
+        
+        if not access_token:
+            raise HTTPException(status_code=400, detail="access_token is required")
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+
+        graph_url = "https://graph.microsoft.com/v1.0/me/messages"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(graph_url, headers=headers)
+
+        if response.status_code == 401:
+            raise HTTPException(status_code=401, detail="Invalid or expired access_token")
+        
+        response.raise_for_status()
+
+        data = response.json()
+        value = data.get("value", [])
+
+        if not value:
+            return {
+                "email_count": 0,
+                "emails": [],
+                "message": "No unread emails found",
+            }
+
+        # Convert to simple dict format
+        emails = []
+        for msg in value:
+            sender = (msg.get("from") or {}).get("emailAddress") or {}
+            emails.append({
+                "id": msg.get("id"),
+                "subject": msg.get("subject") or "(No Subject)",
+                "sender": sender.get("name") or "Unknown",
+                "sender_email": sender.get("address") or "unknown@example.com",
+                "received_at": msg.get("receivedDateTime"),
+                "preview": (msg.get("bodyPreview") or "")[:100],
+            })
+
+        return {
+            "email_count": len(emails),
+            "emails": emails,
+            "message": f"Successfully fetched {len(emails)} unread email(s)",
+        }
+
+    except httpx.HTTPStatusError as e:
+        print(f"Error fetching user emails: {e}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"Graph API error: {e.response.text}")
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -240,4 +324,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+

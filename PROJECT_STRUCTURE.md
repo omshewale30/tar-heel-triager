@@ -22,6 +22,7 @@ tar-heel-triager/
 │   ├── components/
 │   │   └── ApprovalPanel.js        # Response approval UI component
 │   ├── pages/
+|   |   |-- landing.js              #User lands on this page (from here user can login, use Azure MSAL auth to let users sign)
 │   │   ├── _app.js                 # Next.js app wrapper
 │   │   ├── dashboard.js            # Main dashboard page
 │   │   └── index.js                # Redirect to dashboard
