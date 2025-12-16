@@ -2,23 +2,23 @@ import { useState, useEffect } from 'react';
 import ApprovalPanel from '../components/ApprovalPanel';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
+import { fetchUserEmails, fetchPendingEmails, approveResponse } from '../api';
 import { useMsal } from '@azure/msal-react';
 
 function DashboardContent() {
-  const { instance, accounts } = useMsal();
   const [pendingEmails, setPendingEmails] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [filterRoute, setFilterRoute] = useState('all');
   const [fetchingEmails, setFetchingEmails] = useState(false);
   const [fetchStatus, setFetchStatus] = useState(null);
-
+  const { instance, accounts } = useMsal();
   useEffect(() => {
-    fetchPendingEmails();
+    loadPendingEmails();
   }, [filterRoute]);
 
-  const fetchPendingEmails = async () => {
+  const loadPendingEmails = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/approval-queue?route_filter=${filterRoute}`);
+      const response = await fetchPendingEmails(filterRoute);
       if (response.ok) {
         const data = await response.json();
         setPendingEmails(data);
@@ -30,20 +30,11 @@ function DashboardContent() {
 
   const handleApprove = async (approvalId, editedResponse) => {
     try {
-      const response = await fetch('http://localhost:8000/approve-response', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          approval_id: approvalId,
-          staff_edits: editedResponse,
-        }),
-      });
+      const response = await approveResponse(approvalId, editedResponse);
 
       if (response.ok) {
         alert('Response sent successfully!');
-        fetchPendingEmails();
+        loadPendingEmails();
         setSelectedEmail(null);
       } else {
         alert('Failed to send response');
@@ -56,7 +47,7 @@ function DashboardContent() {
 
   const handleReject = async (approvalId) => {
     alert('Email flagged for review');
-    fetchPendingEmails();
+    loadPendingEmails();
     setSelectedEmail(null);
   };
 
@@ -66,25 +57,7 @@ function DashboardContent() {
     
     try {
  
-      const graphScopes = ['https://graph.microsoft.com/Mail.Read'];
-      
-      const tokenResponse = await instance.acquireTokenSilent({
-        scopes: graphScopes,
-        account: accounts[0]
-      });
-      
-      const accessToken = tokenResponse.accessToken;
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/fetch-user-emails`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          access_token: accessToken,
-        })
-      });
-      
+      const response = await fetchUserEmails(instance, accounts);
       if (response.ok) {
         const data = await response.json();
         setFetchStatus({

@@ -44,7 +44,7 @@ class EmailClassifier:
             }
         """
         prompt = f"""
-        Classify this student billing email:
+        Classify this email:
         Subject: {subject}
         Body: {body}
         

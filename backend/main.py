@@ -252,7 +252,7 @@ async def get_approval_queue(route_filter: str = "all"):
 @app.post("/fetch-user-emails")
 async def fetch_user_emails(request: dict):
     """
-    Fetch emails from the authenticated user's mailbox using their access token
+    Fetches unreademails from the authenticated user's mailbox using their access token
     This uses delegated permissions (Mail.Read) - the user's token allows reading their own emails
     
     Args:
@@ -270,9 +270,14 @@ async def fetch_user_emails(request: dict):
         }
 
         graph_url = "https://graph.microsoft.com/v1.0/me/messages"
+
+        # Query for unread emails
+        params = {
+            "$filter": "isRead eq false"
+        }
         
         async with httpx.AsyncClient() as client:
-            response = await client.get(graph_url, headers=headers)
+            response = await client.get(graph_url, headers=headers, params=params)
 
         if response.status_code == 401:
             raise HTTPException(status_code=401, detail="Invalid or expired access_token")
