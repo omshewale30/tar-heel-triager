@@ -21,10 +21,8 @@ export const fetchUserEmails = async (instance, accounts) => {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            access_token: accessToken,
-        })
+            'Authorization': `Bearer ${accessToken}`
+        }
     });
 
     return response;
@@ -46,5 +44,29 @@ export const approveResponse = async (approvalId, staffEdits = '') => {
             staff_edits: staffEdits,
         }),
     });
+    return response;
+};
+
+export const testTriageEmails = async (instance, accounts) => {
+    const graphScopes = ['https://graph.microsoft.com/Mail.Read'];
+    if (!accounts.length) {
+        throw new Error('No accounts found');
+    }
+
+    const tokenResponse = await instance.acquireTokenSilent({
+        scopes: graphScopes,
+        account: accounts[0]
+    });
+    
+    const accessToken = tokenResponse.accessToken;
+    
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/fetch-triage-emails`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+        }
+    });
+
     return response;
 };

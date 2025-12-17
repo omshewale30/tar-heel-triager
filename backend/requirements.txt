@@ -5,7 +5,7 @@ python-multipart==0.0.6
 
 # Azure services
 azure-identity==1.15.0
-azure-ai-projects==1.0.0  # Update version based on actual package
+azure-ai-projects==1.0.0
 msgraph-sdk==1.0.0  # Microsoft Graph SDK
 
 # Database
@@ -27,4 +27,6 @@ pytest-asyncio==0.21.1
 # Optional: For production deployment
 gunicorn==21.2.0
 
-pydant
+pydantic
+openai
+logging

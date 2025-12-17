@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import ApprovalPanel from '../components/ApprovalPanel';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
-import { fetchUserEmails, fetchPendingEmails, approveResponse } from '../api';
+import { fetchUserEmails, fetchPendingEmails, approveResponse, testTriageEmails } from '../api';
 import { useMsal } from '@azure/msal-react';
 
 function DashboardContent() {
@@ -11,6 +11,7 @@ function DashboardContent() {
   const [filterRoute, setFilterRoute] = useState('all');
   const [fetchingEmails, setFetchingEmails] = useState(false);
   const [fetchStatus, setFetchStatus] = useState(null);
+  const [testingTriage, setTestingTriage] = useState(false);
   const { instance, accounts } = useMsal();
   useEffect(() => {
     loadPendingEmails();
@@ -83,6 +84,26 @@ function DashboardContent() {
     }
   };
 
+  const handleTestTriage = async () => {
+    setTestingTriage(true);
+    try {
+      const response = await testTriageEmails(instance, accounts);
+      if (response.ok) {
+        console.log('Triage test completed - check backend terminal for results');
+        alert('Triage test completed! Check backend terminal for results.');
+      } else {
+        const error = await response.json();
+        console.error('Triage test failed:', error);
+        alert(`Triage test failed: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error testing triage:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setTestingTriage(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <Header />
@@ -114,6 +135,27 @@ function DashboardContent() {
                   </span>
                 ) : (
                   '📧 Fetch My Emails'
+                )}
+              </button>
+              <button
+                onClick={handleTestTriage}
+                disabled={testingTriage}
+                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                  testingTriage
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'
+                }`}
+              >
+                {testingTriage ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Testing...
+                  </span>
+                ) : (
+                  '🧪 Test Ingestion & Triage'
                 )}
               </button>
               <div className="text-right">
