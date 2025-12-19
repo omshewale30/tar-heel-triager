@@ -3,192 +3,130 @@ Azure AI Foundry Agent Handler
 Sends emails to Foundry Agent for FAQ responses
 """
 import os
-import asyncio
 import re
-from typing import Dict, Optional
-from azure.identity import DefaultAzureCredential
+import asyncio
+from typing import Dict
 from dotenv import load_dotenv
-
-# Note: Update these imports based on actual azure-ai-projects SDK
-# The following is a placeholder implementation
-try:
-    from azure.ai.projects import AIProjectClient
-    from azure.ai.projects.models import MessageContentPart
-except ImportError:
-    print("Warning: azure-ai-projects not installed. Agent handler will use mock responses.")
+from azure.ai.projects import AIProjectClient
 
 load_dotenv()
+
+
+def clean_agent_response(raw_text: str) -> str:
+    """
+    Clean agent response by removing citation markers.
+    Links are now included by the agent at the bottom of the response.
+    
+    Args:
+        raw_text: Raw response from Azure AI agent
+        
+    Returns:
+        Cleaned text with citations removed
+    """
+    if not raw_text:
+        return ""
+    
+    # Remove citation markers like 【4:4†source】 or 【4:0†UNC_Cashier_FAQ.pdf】
+    citation_pattern = r'【[^】]*†[^】]*】'
+    cleaned_text = re.sub(citation_pattern, '', raw_text)
+    
+    # Remove trailing spaces on lines
+    cleaned_text = re.sub(r' +\n', '\n', cleaned_text)
+    # Remove multiple consecutive newlines (more than 2)
+    cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text)
+    cleaned_text = cleaned_text.strip()
+    
+    return cleaned_text
 
 
 class AzureAIFoundryAgent:
     """Handler for Azure AI Foundry Agent queries"""
     
-    def __init__(self, project_endpoint: Optional[str] = None, agent_id: Optional[str] = None):
+    def __init__(self, project_client: AIProjectClient):
         """
         Initialize Foundry Agent handler
         
         Args:
-            project_endpoint: Azure AI Foundry project endpoint
-            agent_id: Agent ID from Foundry portal
+            project_client: Azure AI Foundry project client (sync version)
         """
-        if project_endpoint is None:
-            project_endpoint = os.getenv('AZURE_AI_PROJECT_ENDPOINT')
-        
-        if agent_id is None:
-            agent_id = os.getenv('AZURE_AI_FOUNDRY_AGENT_ID')
-        
-        if not project_endpoint or not agent_id:
-            print("Warning: Azure AI Foundry credentials not configured. Using mock responses.")
-            self.client = None
-            self.agent_id = agent_id
-            return
-        
-        try:
-            # Initialize Azure AI Foundry client
-            credential = DefaultAzureCredential()
-            # Note: Update this initialization based on actual SDK
-            self.client = AIProjectClient.from_connection_string(
-                conn_str=project_endpoint,
-                credential=credential
-            )
-            self.agent_id = agent_id
-        except Exception as e:
-            print(f"Warning: Failed to initialize Foundry client: {e}")
-            self.client = None
-            self.agent_id = agent_id
+        self.project_client = project_client
+        self.agent_id = os.getenv("AZURE_AGENT_ID")
     
-    async def query_faq_agent(self, email_body: str) -> Dict:
+    async def query_agent(self, subject: str, email_body: str) -> Dict:
         """
         Send email to Azure AI Foundry agent for FAQ response
-        
-        Agent handles: vectorization, retrieval, generation, citations
-        
-        Args:
-            email_body: Content of the email to process
-        
-        Returns:
-            {
-                'response': 'The student accounting portal...',
-                'sources': ['billing_policy_2025.pdf'],
-                'confidence': 0.95,
-                'agent_used': True
-            }
         """
-        # Mock response if client not configured
-        if self.client is None:
-            return self._mock_response(email_body)
+        if self.project_client is None:
+            raise ValueError("Project client not initialized")
         
         try:
-            # Create a thread (conversation)
-            thread = self.client.agents.create_thread()
-            
-            # Create message in thread
-            message = self.client.agents.create_message(
+            # 1. Create Thread
+            thread = await asyncio.to_thread(
+                self.project_client.agents.threads.create
+            )
+            print(f"Created thread: {thread.id}")
+
+            # 2. Add message to thread
+            message = await asyncio.to_thread(
+                self.project_client.agents.messages.create,
                 thread_id=thread.id,
                 role="user",
-                content=email_body
+                content=f"Subject: {subject}\nBody: {email_body}"
             )
-            
-            # Run agent (it will search knowledge base, generate response)
-            run = self.client.agents.create_run(
-                thread_id=thread.id,
-                assistant_id=self.agent_id
+            print(f"Created message: {message.id}")
+
+            # 3. Create and process run (this polls internally until completion)
+            run = await asyncio.to_thread(
+                self.project_client.agents.runs.create_and_process,
+                agent_id=self.agent_id,
+                thread_id=thread.id
             )
-            
-            # Wait for completion
-            max_retries = 30
-            wait_count = 0
-            while run.status != "completed" and wait_count < max_retries:
-                await asyncio.sleep(1)
-                run = self.client.agents.get_run(thread_id=thread.id, run_id=run.id)
-                wait_count += 1
-            
+            print(f"Run completed with status: {run.status}")
+
             if run.status != "completed":
-                raise TimeoutError("Agent response timeout")
+                raise RuntimeError(f"Agent run failed. Status: {run.status}")
             
-            # Get response messages
-            messages = self.client.agents.list_messages(thread_id=thread.id)
+            # 4. Get response messages (returns ItemPaged iterator)
+            messages_iter = await asyncio.to_thread(
+                self.project_client.agents.messages.list,
+                thread_id=thread.id
+            )
             
-            # Extract response (last message from agent)
+            # Convert iterator to list in thread pool
+            messages_list = await asyncio.to_thread(list, messages_iter)
+            
+            # 5. Extract response - filter for assistant messages
+            assistant_messages = [msg for msg in messages_list if msg.role == "assistant"]
+            
             response_text = ""
-            sources = []
+            if assistant_messages:
+                latest_message = assistant_messages[-1]  # Get the last assistant message
+                # Extract text from message content
+                if latest_message.content and isinstance(latest_message.content, list):
+                    for part in latest_message.content:
+                        # Handle dict-style content (from API)
+                        if isinstance(part, dict):
+                            if part.get("type") == "text" and "text" in part and "value" in part["text"]:
+                                response_text = part["text"]["value"]
+                                break
+                        # Handle object-style content
+                        elif hasattr(part, 'text') and hasattr(part.text, 'value'):
+                            response_text = part.text.value
+                            break
             
-            for msg in messages.data:
-                if msg.role == "assistant":
-                    for content in msg.content:
-                        if isinstance(content, MessageContentPart):
-                            response_text = content.text
-                            # Extract citations from response
-                            # Azure automatically adds [doc_name] citations
-                            sources = re.findall(r'\[(.*?)\]', response_text)
-            
-            # Clean up thread
-            self.client.agents.delete_thread(thread.id)
+            # 6. Clean the response (remove citations)
+            cleaned_response = clean_agent_response(response_text)
             
             return {
-                'response': response_text,
-                'sources': list(set(sources)),  # Unique sources
-                'confidence': 0.95 if response_text else 0.0,
-                'agent_used': True
+                'response': cleaned_response,      # Clean text ready for email (links included at bottom)
+                'thread_id': thread.id,            # Conversation context
             }
         
         except Exception as e:
-            print(f"Error querying FAQ agent: {e}")
+            print(f"Error querying agent: {e}")
             return {
                 'response': None,
                 'error': str(e),
-                'agent_used': False,
-                'sources': [],
-                'confidence': 0.0
             }
-    
-    def _mock_response(self, email_body: str) -> Dict:
-        """Generate mock response when agent not configured"""
-        print("Using mock FAQ response (agent not configured)")
-        
-        # Simple keyword-based mock response
-        lower_body = email_body.lower()
-        
-        if 'balance' in lower_body or 'owe' in lower_body:
-            response = """You can check your balance in three ways:
-1. Log into the Student Accounting Portal at [link]
-2. Call the Cashier's Office at [phone]
-3. Email cashier@unc.edu with your student ID
-
-Your balance updates daily. [billing_procedures_2025.pdf]"""
-            sources = ['billing_procedures_2025.pdf']
-        
-        elif 'payment' in lower_body or 'pay' in lower_body:
-            response = """We accept multiple payment methods:
-- Credit/Debit cards (Visa, Mastercard, Discover, Amex)
-- Bank transfers (ACH)
-- Wire transfers
-- Checks (mail to [address])
-
-All methods process within 2-3 business days. [payment_policy_2025.pdf]"""
-            sources = ['payment_policy_2025.pdf']
-        
-        elif 'hold' in lower_body or 'blocked' in lower_body:
-            response = """Common reasons for holds:
-- Outstanding balance (payment due)
-- Overdue library fines
-- Parking violations
-
-To resolve: Contact cashier@unc.edu or visit the Cashier's Office in [location]. [financial_policy_2025.pdf]"""
-            sources = ['financial_policy_2025.pdf']
-        
-        else:
-            response = "Thank you for contacting the Cashier's Office. Please contact cashier@unc.edu for assistance with your inquiry."
-            sources = []
-        
-        return {
-            'response': response,
-            'sources': sources,
-            'confidence': 0.75,
-            'agent_used': False,  # Marked as False to indicate mock
-            'note': 'Mock response - configure Foundry agent for production'
-        }
 
 
-# Initialize agent globally
-agent = AzureAIFoundryAgent()

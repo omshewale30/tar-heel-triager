@@ -11,6 +11,9 @@ import os
 Base = declarative_base()
 
 
+
+
+
 class ApprovalQueue(Base):
     """Approval queue for emails awaiting staff review"""
     

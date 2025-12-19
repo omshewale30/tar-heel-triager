@@ -16,12 +16,10 @@ from contextlib import asynccontextmanager
 from email_reader import EmailReader
 from classifier import EmailClassifier
 from priority_scorer import PriorityScorer
-from agent_handler import agent
+from agent_handler import AzureAIFoundryAgent
 from fastapi.middleware.cors import CORSMiddleware
 from models import ApprovalQueue, db
 from azure.azure_ai_client import AzureAIClient
-from prompts import triage_prompt
-
 load_dotenv()
 
 
@@ -47,11 +45,11 @@ app.add_middleware(
 
 security = HTTPBearer()
 # Initialize services
-classifier = EmailClassifier()
+
 priority_scorer = PriorityScorer()
 azure_ai_client = AzureAIClient()
-
-
+classifier = EmailClassifier(llm=azure_ai_client.get_llm())
+agent = AzureAIFoundryAgent(project_client=azure_ai_client.project_client)
 # Request/Response Models
 class EmailTriageRequest(BaseModel):
     email_id: str
@@ -277,42 +275,44 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
         raise HTTPException(status_code=401, detail="access_token is required")
     try:
         email_reader = EmailReader(access_token=access_token)
+        
         if not email_reader:
             raise HTTPException(status_code=400, detail="access_token is required")
         emails = await email_reader.get_unread_emails()
         if not emails:
             raise HTTPException(status_code=400, detail="No unread emails found")
-        
-        triage_llm  = azure_ai_client.get_llm()
-        if not triage_llm:
-            raise HTTPException(status_code=400, detail="Failed to get triage agent")
 
-        triage_results = []
-        for email in emails:
-            response = triage_llm.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": triage_prompt},
-                    {"role": "user", "content": f"Subject: {email.subject}\nBody: {email.body}"}
-                ]
-            )
-            print(f"Triage result for email {email.id}: {response.choices[0].message.content}")
-            triage_results.append({
-                "email_id": email.id,
-                "subject": email.subject,
-                "body": email.body,
-                "sender": email.sender,
-                "sender_email": email.sender_email,
-                "received_at": email.received_at,
-                "triage_result": response.choices[0].message.content
-            })
+        triage_results, agent_emails = await classifier.classify_emails(emails)
+        if not triage_results:
+            raise HTTPException(status_code=400, detail="Failed to classify emails")
+        email_responses = []
+
+        for agent_email in agent_emails:
+            response = await agent.query_agent(agent_email.email.subject, agent_email.email.body)
+            if response:
+                email_responses.append({
+                    "email_id": agent_email.email_id,
+                    "subject": agent_email.email.subject,
+                    "body": response['response'],
+                    "thread_id": response['thread_id']
+                })
         
-        
-        return {
-            "status": "success",
-            "message": "Successfully triaged emails",
-            "triage_results": triage_results
-        }
+        if email_responses:
+            return {
+                "status": "success",
+                "message": "Successfully triaged emails",
+                "triage_results": triage_results,
+                "agent_emails": agent_emails,
+                "email_responses": email_responses
+            }
+        else:
+            return {
+                "status": "success",
+                "message": "No emails to triage",
+                "triage_results": triage_results,
+                "agent_emails": agent_emails,
+                "email_responses": []
+            }
 
     except httpx.HTTPStatusError as e:
         print(f"Error fetching user emails: {e}")
