@@ -19,10 +19,10 @@ function DashboardContent() {
 
   const loadPendingEmails = async () => {
     try {
-      const response = await fetchPendingEmails(filterRoute);
+      const response = await fetchPendingEmails(instance, accounts, filterRoute);
       if (response.ok) {
         const data = await response.json();
-        setPendingEmails(data);
+        setPendingEmails(data.emails);
       }
     } catch (error) {
       console.error('Error fetching emails:', error);

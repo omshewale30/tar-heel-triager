@@ -40,7 +40,8 @@ class EmailReader:
         self.base_url = "https://graph.microsoft.com/v1.0"
         self.headers = {
             "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Prefer": 'outlook.body-content-type="text"'
         }
 
     async def get_unread_emails(self, max_results: int = 10) -> List[Email]:
