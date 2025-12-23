@@ -2,27 +2,27 @@ import { useState, useEffect } from 'react';
 import ApprovalPanel from '../components/ApprovalPanel';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
-import { fetchUserEmails, fetchPendingEmails, approveResponse, testTriageEmails } from '../api';
+import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue } from '../api';
 import { useMsal } from '@azure/msal-react';
 
 function DashboardContent() {
-  const [pendingEmails, setPendingEmails] = useState([]);
+  const [approvalQueue, setApprovalQueue] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [filterRoute, setFilterRoute] = useState('all');
   const [fetchingEmails, setFetchingEmails] = useState(false);
   const [fetchStatus, setFetchStatus] = useState(null);
-  const [testingTriage, setTestingTriage] = useState(false);
+  const [fetchingTriage, setFetchingTriage] = useState(false);
   const { instance, accounts } = useMsal();
   useEffect(() => {
-    loadPendingEmails();
+    loadApprovalQueue();
   }, [filterRoute]);
 
-  const loadPendingEmails = async () => {
+  const loadApprovalQueue = async () => {
     try {
-      const response = await fetchPendingEmails(instance, accounts, filterRoute);
+      const response = await getApprovalQueue(instance, accounts);
       if (response.ok) {
         const data = await response.json();
-        setPendingEmails(data.emails);
+        setApprovalQueue(data);
       }
     } catch (error) {
       console.error('Error fetching emails:', error);
@@ -35,7 +35,7 @@ function DashboardContent() {
 
       if (response.ok) {
         alert('Response sent successfully!');
-        loadPendingEmails();
+        loadApprovalQueue();
         setSelectedEmail(null);
       } else {
         alert('Failed to send response');
@@ -48,7 +48,7 @@ function DashboardContent() {
 
   const handleReject = async (approvalId) => {
     alert('Email flagged for review');
-    loadPendingEmails();
+    loadApprovalQueue();
     setSelectedEmail(null);
   };
 
@@ -84,23 +84,23 @@ function DashboardContent() {
     }
   };
 
-  const handleTestTriage = async () => {
-    setTestingTriage(true);
+  const handleFetchTriage = async () => {
+    setFetchingTriage(true);
     try {
-      const response = await testTriageEmails(instance, accounts);
+      const response = await fetchTriageEmails(instance, accounts);
       if (response.ok) {
-        console.log('Triage test completed - check backend terminal for results');
-        alert('Triage test completed! Check backend terminal for results.');
+        console.log('Triage emails fetched successfully');
+        alert('Triage emails fetched successfully');
       } else {
         const error = await response.json();
-        console.error('Triage test failed:', error);
-        alert(`Triage test failed: ${error.detail || 'Unknown error'}`);
+        console.error('Triage emails fetch failed:', error);
+        alert(`Triage emails fetch failed: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error testing triage:', error);
-      alert(`Error: ${error.message}`);
+      console.error('Error fetching triage emails:', error);
+      alert(`Error fetching triage emails: ${error.message}`);
     } finally {
-      setTestingTriage(false);
+      setFetchingTriage(false);
     }
   };
 
@@ -109,25 +109,25 @@ function DashboardContent() {
       <Header />
       
       <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-screen-2xl mx-auto px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Email Triage Dashboard</h2>
-              <p className="text-sm text-gray-600 mt-1">Review and approve email responses</p>
+              <h2 className="text-3xl font-bold text-gray-900">Email Triage Dashboard</h2>
+              <p className="text-base text-gray-600 mt-2">Review and approve email responses</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-6">
               <button
                 onClick={handleFetchEmails}
                 disabled={fetchingEmails}
-                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                className={`px-6 py-3 rounded-xl font-semibold text-base transition-all ${
                   fetchingEmails
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
                 }`}
               >
                 {fetchingEmails ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <span className="flex items-center gap-3">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
@@ -138,30 +138,30 @@ function DashboardContent() {
                 )}
               </button>
               <button
-                onClick={handleTestTriage}
-                disabled={testingTriage}
-                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                  testingTriage
+                onClick={handleFetchTriage}
+                disabled={fetchingTriage}
+                className={`px-6 py-3 rounded-xl font-semibold text-base transition-all ${
+                  fetchingTriage
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg'
                 }`}
               >
-                {testingTriage ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                {fetchingTriage ? (
+                  <span className="flex items-center gap-3">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    Testing...
+                    Fetching...
                   </span>
                 ) : (
-                  '🧪 Test Ingestion & Triage'
+                  '📥 Fetch & Triage Emails'
                 )}
               </button>
-              <div className="text-right">
-                <div className="text-xs text-gray-500 mb-1">Pending Emails</div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {pendingEmails.length}
+              <div className="text-right pl-4 border-l-2 border-gray-200">
+                <div className="text-sm text-gray-500 mb-1">Pending Emails</div>
+                <div className="text-3xl font-bold text-blue-600">
+                  {approvalQueue.length}
                 </div>
               </div>
             </div>
@@ -169,25 +169,25 @@ function DashboardContent() {
           
           {/* Fetch Status Message */}
           {fetchStatus && (
-            <div className={`mt-3 p-3 rounded-lg ${
+            <div className={`mt-4 p-4 rounded-xl ${
               fetchStatus.type === 'success' 
-                ? 'bg-green-50 border border-green-200' 
-                : 'bg-red-50 border border-red-200'
+                ? 'bg-green-50 border-2 border-green-200' 
+                : 'bg-red-50 border-2 border-red-200'
             }`}>
-              <p className={`text-sm font-medium ${
+              <p className={`text-base font-medium ${
                 fetchStatus.type === 'success' ? 'text-green-800' : 'text-red-800'
               }`}>
                 {fetchStatus.message}
               </p>
               {fetchStatus.emails && fetchStatus.emails.length > 0 && (
-                <div className="mt-2 space-y-1">
+                <div className="mt-3 space-y-2">
                   {fetchStatus.emails.slice(0, 3).map((email, idx) => (
-                    <div key={idx} className="text-xs text-green-700">
+                    <div key={idx} className="text-sm text-green-700">
                       • {email.subject} - from {email.sender_email}
                     </div>
                   ))}
                   {fetchStatus.emails.length > 3 && (
-                    <div className="text-xs text-green-600 italic">
+                    <div className="text-sm text-green-600 italic">
                       ...and {fetchStatus.emails.length - 3} more
                     </div>
                   )}
@@ -198,44 +198,41 @@ function DashboardContent() {
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto p-6 pb-8">
-        <div className="grid grid-cols-3 gap-6">
+      <main className="max-w-screen-2xl mx-auto px-8 py-8">
+        <div className="grid grid-cols-3 gap-8">
           {/* Left: Email List */}
           <div className="col-span-1">
-            <div className="bg-white rounded-xl shadow-lg p-5 border border-gray-200">
-              <div className="mb-5">
-                <label className="block text-sm font-semibold text-gray-800 mb-2.5">
+            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+              <div className="mb-6">
+                <label className="block text-base font-bold text-gray-800 mb-3 uppercase tracking-wide">
                   Filter by Route
                 </label>
                 <select
                   value={filterRoute}
                   onChange={(e) => setFilterRoute(e.target.value)}
-                  className="w-full p-2.5 border-2 border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white font-medium"
+                  className="w-full p-4 border-2 border-gray-300 rounded-xl text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white font-medium"
                 >
                   <option value="all">📧 All Emails</option>
-                  <option value="auto_faq">✓ Auto-FAQ (Ready to Send)</option>
-                  <option value="manual">⚠ Manual Review Required</option>
-                  <option value="urgent">🔴 URGENT</option>
+                  <option value="AI_AGENT">🤖 AI Agent (Ready to Send)</option>
+                  <option value="HUMAN_REQUIRED">👤 Human Required</option>
                 </select>
               </div>
 
-              <div className="space-y-2.5 max-h-[650px] overflow-y-auto pr-1">
-                {pendingEmails.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="text-4xl mb-3">📭</div>
-                    <p className="text-sm text-gray-500 font-medium">No pending emails</p>
-                    <p className="text-xs text-gray-400 mt-1">All caught up!</p>
+              <div className="space-y-4 max-h-[700px] overflow-y-auto pr-2">
+                {approvalQueue.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="text-6xl mb-4">📭</div>
+                    <p className="text-lg text-gray-500 font-medium">No pending emails</p>
+                    <p className="text-base text-gray-400 mt-2">All caught up!</p>
                   </div>
                 ) : (
-                  pendingEmails.map((email) => (
+                  approvalQueue.map((email) => (
                     <div
                       key={email.id}
                       onClick={() => setSelectedEmail(email)}
-                      className={`p-3.5 border-2 rounded-lg cursor-pointer transition-all duration-200 transform hover:scale-[1.02] ${
-                        email.route === 'auto_faq'
+                      className={`p-5 border-2 rounded-xl cursor-pointer transition-all duration-200 transform hover:scale-[1.02] ${
+                        email.route === 'AI_AGENT'
                           ? 'bg-green-50 border-green-300 hover:bg-green-100 hover:border-green-400 hover:shadow-md'
-                          : email.route === 'urgent'
-                          ? 'bg-red-50 border-red-300 hover:bg-red-100 hover:border-red-400 hover:shadow-md'
                           : 'bg-yellow-50 border-yellow-300 hover:bg-yellow-100 hover:border-yellow-400 hover:shadow-md'
                       } ${
                         selectedEmail?.id === email.id
@@ -243,36 +240,27 @@ function DashboardContent() {
                           : ''
                       }`}
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="text-sm font-bold text-gray-900 line-clamp-2 flex-1 pr-2">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="text-base font-bold text-gray-900 line-clamp-2 flex-1 pr-3">
                           {email.subject}
                         </div>
-                        {email.route === 'auto_faq' && email.confidence && (
-                          <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
+                        {email.route === 'AI_AGENT' && email.confidence && (
+                          <span className="text-sm bg-green-200 text-green-800 px-3 py-1 rounded-full font-bold whitespace-nowrap">
                             {(email.confidence * 100).toFixed(0)}%
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-600 mt-1.5 font-medium">
+                      <div className="text-sm text-gray-600 mb-3 font-medium">
                         {email.sender_email}
                       </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                          email.route === 'auto_faq'
+                      <div className="flex items-center gap-3">
+                        <span className={`text-sm font-bold px-3 py-1.5 rounded-lg ${
+                          email.route === 'AI_AGENT'
                             ? 'bg-green-200 text-green-800'
-                            : email.route === 'urgent'
-                            ? 'bg-red-200 text-red-800'
                             : 'bg-yellow-200 text-yellow-800'
                         }`}>
-                          {email.route === 'auto_faq' && '✓ AI-Generated'}
-                          {email.route === 'manual' && '⚠ Needs Review'}
-                          {email.route === 'urgent' && '🔴 URGENT'}
+                          {email.route === 'AI_AGENT' ? '🤖 AI Response Ready' : '👤 Manual Review'}
                         </span>
-                        {email.priority >= 7 && (
-                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded font-semibold">
-                            P{email.priority}
-                          </span>
-                        )}
                       </div>
                     </div>
                   ))
@@ -283,78 +271,88 @@ function DashboardContent() {
 
           {/* Middle: Email Preview */}
           <div className="col-span-1">
-            <div className="bg-white rounded-xl shadow-lg p-5 border border-gray-200 h-fit">
+            <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200 h-fit">
               {selectedEmail ? (
                 <div className="animate-fade-in">
-                  <div className="mb-5 pb-4 border-b border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900 mb-3 leading-tight">
+                  {/* Header */}
+                  <div className="mb-6 pb-5 border-b border-gray-200">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4 leading-tight">
                       {selectedEmail.subject}
                     </h2>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-700 w-16">From:</span>
-                        <span className="text-gray-600">{selectedEmail.sender_email}</span>
+                    <div className="space-y-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">From</span>
+                        <span className="text-base text-gray-800">{selectedEmail.sender_email}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-700 w-16">Category:</span>
-                        <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs font-medium">
-                          {selectedEmail.category}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-700 w-16">Priority:</span>
-                        <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${
-                          selectedEmail.priority >= 7
-                            ? 'bg-red-100 text-red-700'
-                            : selectedEmail.priority >= 5
-                            ? 'bg-orange-100 text-orange-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {selectedEmail.priority}/10
-                        </span>
+                      {selectedEmail.created_at && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Received</span>
+                          <span className="text-base text-gray-800">
+                            {new Date(selectedEmail.created_at).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })} at {new Date(selectedEmail.created_at).toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-6">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Route</span>
+                          <span className={`inline-flex px-3 py-1.5 rounded-lg text-sm font-bold w-fit ${
+                            selectedEmail.route === 'AI_AGENT'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {selectedEmail.route === 'AI_AGENT' ? '🤖 AI Agent' : '👤 Human Required'}
+                          </span>
+                        </div>
+                        {selectedEmail.confidence && (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Confidence</span>
+                            <span className="inline-flex px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold w-fit">
+                              {(selectedEmail.confidence * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="mb-5">
-                    <h3 className="text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
-                      Email Body
+                  {/* Original Email Body */}
+                  <div className="mb-6">
+                    <h3 className="text-base font-bold text-gray-800 mb-3 uppercase tracking-wide">
+                      📧 Original Email
                     </h3>
-                    <div className="text-sm text-gray-800 bg-gray-50 p-4 rounded-lg border-2 border-gray-200 max-h-48 overflow-y-auto leading-relaxed">
+                    <div className="text-base text-gray-800 bg-gray-50 p-5 rounded-xl border-2 border-gray-200 max-h-64 overflow-y-auto leading-relaxed whitespace-pre-wrap">
                       {selectedEmail.body}
                     </div>
                   </div>
 
-                  {/* Route Indicator */}
+                  {/* Route Status Indicator */}
                   <div
-                    className={`p-4 rounded-lg border-2 ${
-                      selectedEmail.route === 'auto_faq'
+                    className={`p-5 rounded-xl border-2 ${
+                      selectedEmail.route === 'AI_AGENT'
                         ? 'bg-green-50 border-green-400 shadow-sm'
-                        : selectedEmail.route === 'urgent'
-                        ? 'bg-red-50 border-red-400 shadow-sm'
                         : 'bg-yellow-50 border-yellow-400 shadow-sm'
                     }`}
                   >
-                    <p className="text-sm font-bold mb-1">
-                      {selectedEmail.route === 'auto_faq' &&
-                        '✓ AI-Generated from FAQ Agent'}
-                      {selectedEmail.route === 'manual' &&
-                        '⚠ Requires Manual Response'}
-                      {selectedEmail.route === 'urgent' &&
-                        '🔴 URGENT - Needs Immediate Attention'}
+                    <p className="text-base font-bold">
+                      {selectedEmail.route === 'AI_AGENT'
+                        ? '✓ AI-Generated Response Ready for Review'
+                        : '⚠ Requires Manual Response'}
                     </p>
-                    {selectedEmail.route === 'auto_faq' && selectedEmail.confidence && (
-                      <p className="text-xs text-gray-700 mt-2 font-medium">
-                        Confidence Score: <span className="font-bold">{(selectedEmail.confidence * 100).toFixed(0)}%</span>
-                      </p>
-                    )}
                   </div>
                 </div>
               ) : (
-                <div className="text-center text-gray-400 py-16">
-                  <div className="text-5xl mb-4">📬</div>
-                  <p className="text-base font-medium">Select an email to view details</p>
-                  <p className="text-sm mt-1">Choose from the list on the left</p>
+                <div className="text-center text-gray-400 py-20">
+                  <div className="text-6xl mb-5">📬</div>
+                  <p className="text-lg font-medium">Select an email to view details</p>
+                  <p className="text-base mt-2">Choose from the list on the left</p>
                 </div>
               )}
             </div>
@@ -372,11 +370,11 @@ function DashboardContent() {
                 onReject={() => handleReject(selectedEmail.id)}
               />
             ) : (
-              <div className="bg-white rounded-xl shadow-lg p-5 border border-gray-200">
-                <div className="text-center text-gray-400 py-16">
-                  <div className="text-5xl mb-4">✉️</div>
-                  <p className="text-base font-medium">Select an email to approve or edit</p>
-                  <p className="text-sm mt-1">Response panel will appear here</p>
+              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+                <div className="text-center text-gray-400 py-20">
+                  <div className="text-6xl mb-5">✉️</div>
+                  <p className="text-lg font-medium">Select an email to approve or edit</p>
+                  <p className="text-base mt-2">Response panel will appear here</p>
                 </div>
               </div>
             )}

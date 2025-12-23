@@ -2,7 +2,7 @@
 Microsoft Graph Email Reader for UNC Cashier Email Triage
 Fetches unread emails and marks them as read after processing
 """
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 import os
@@ -93,6 +93,51 @@ class EmailReader:
                 json=payload
             )
             return response.status_code == 200
+    
+    async def send_email_enhanced(self, to: List[str], subject: str, body: str,
+                                cc: Optional[List[str]] = None,
+                                bcc: Optional[List[str]] = None,
+                                importance: str = "normal",
+                                save_to_sent: bool = True,
+                                reply_to: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Enhanced send_email with full message capabilities
+        """
+        message = {
+            "subject": subject,
+            "body": {
+                "contentType": "html" if "<html" in body else "text",
+                "content": body
+            },
+            "importance": importance.lower()  # low, normal, high
+        }
+        
+        # Recipients
+        message["toRecipients"] = [{"emailAddress": {"address": addr}} for addr in to]
+        if cc:
+            message["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
+        if bcc:
+            message["bccRecipients"] = [{"emailAddress": {"address": addr}} for addr in bcc]
+        if reply_to:
+            message["replyTo"] = [{"emailAddress": {"address": reply_to}}]
+        
+        payload = {
+            "message": message,
+            "saveToSentItems": save_to_sent
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.base_url}/me/sendMail",
+                headers=self.headers,
+                json=payload
+            )
+            
+            return {
+                "success": response.status_code in [200, 202],
+                "status_code": response.status_code,
+                "message": response.text if not response.is_success else "Email sent successfully"
+            }
 
 
 if __name__ == "__main__":

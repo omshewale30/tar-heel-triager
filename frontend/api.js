@@ -28,6 +28,31 @@ export const fetchUserEmails = async (instance, accounts) => {
     return response;
 };
 
+
+export const getApprovalQueue = async (instance, accounts) => {
+    const graphScopes = ['https://graph.microsoft.com/Mail.Read'];
+    if (!accounts.length) {
+        throw new Error('No accounts found');
+    }
+
+    const tokenResponse = await instance.acquireTokenSilent({
+        scopes: graphScopes,
+        account: accounts[0]
+    });
+
+    const accessToken = tokenResponse.accessToken;
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/approval-queue`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+        }
+    });
+
+    return response;
+};
+
 export const fetchPendingEmails = async (instance, accounts, routeFilter = 'all') => {
 
     /* This is the endpoint to fetch the triage emails */
@@ -65,7 +90,7 @@ export const approveResponse = async (approvalId, staffEdits = '') => {
     return response;
 };
 
-export const testTriageEmails = async (instance, accounts) => {
+export const fetchTriageEmails = async (instance, accounts) => {
     const graphScopes = ['https://graph.microsoft.com/Mail.Read'];
     if (!accounts.length) {
         throw new Error('No accounts found');

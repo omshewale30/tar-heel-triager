@@ -1,5 +1,6 @@
 """
 Database Models for Email Triage System
+Uses Azure PostgreSQL (psycopg2)
 """
 from sqlalchemy import create_engine, Column, String, Integer, Text, Boolean, DateTime, Float
 from sqlalchemy.ext.declarative import declarative_base
@@ -7,10 +8,12 @@ from sqlalchemy.orm import sessionmaker
 import uuid
 from datetime import datetime
 import os
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from dotenv import load_dotenv
+
+load_dotenv()
 
 Base = declarative_base()
-
-
 
 
 
@@ -18,22 +21,22 @@ class ApprovalQueue(Base):
     """Approval queue for emails awaiting staff review"""
     
     __tablename__ = "approval_queue"
+
     
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    conversation_id = Column(String(255), nullable=True, index=True)
+    conversation_index = Column(String(512), nullable=True)
     email_id = Column(String(255))
     subject = Column(Text)
     sender_email = Column(String(255))
     body = Column(Text)
-    category = Column(String(50))
-    priority = Column(Integer)
+    route = Column(String(20))
     generated_response = Column(Text)
     final_response = Column(Text)
-    
-    # Routing and agent fields
-    route = Column(String(20))  # 'auto_faq' | 'manual' | 'urgent'
-    agent_used = Column(Boolean, default=False)
     confidence = Column(Float)
-    
+    # Routing and agent fields
+    agent_used = Column(Boolean, default=False)
     # Approval tracking
     approved = Column(Boolean, default=False)
     approved_at = Column(DateTime)
@@ -53,15 +56,15 @@ class EmailHistory(Base):
     
     __tablename__ = "email_history"
     
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(String(255), nullable=True, index=True)
+    conversation_index = Column(String(512), nullable=True)
     email_id = Column(String(255))
     subject = Column(Text)
     sender_email = Column(String(255))
-    category = Column(String(50))
-    priority = Column(Integer)
     route = Column(String(20))
-    agent_used = Column(Boolean, default=False)
     final_response = Column(Text)
+    confidence = Column(Float)
     approval_status = Column(String(20))  # 'approved', 'rejected', 'edited'
     processed_at = Column(DateTime, default=datetime.now)
     
@@ -69,11 +72,18 @@ class EmailHistory(Base):
         return f"<EmailHistory(id={self.id}, email_id={self.email_id}, status={self.approval_status})>"
 
 
-# Database setup
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./email_triage.db')
+# Database setup - Azure PostgreSQL
+# Connection format: postgresql://user:password@host:port/database
+DB_USER = os.getenv('DB_USER', 'citus')
+DB_PASSWORD = os.getenv('DB_PASSWORD', '')
+DB_HOST = os.getenv('DB_HOST', 'heelper-db.postgres.database.azure.com')
+DB_PORT = os.getenv('DB_PORT', '5432')
+DB_NAME = os.getenv('DB_NAME', 'postgres')
+
+DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
 
 # Create engine
-engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 
 # Create session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
