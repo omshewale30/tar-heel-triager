@@ -15,6 +15,9 @@ export default function ApprovalPanel({ email, route, onApprove, onReject }) {
   const handleApprove = () => {
     onApprove(editedResponse);
   };
+  const handleReject = () => {
+    onReject();
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-200 animate-fade-in">
@@ -96,10 +99,10 @@ export default function ApprovalPanel({ email, route, onApprove, onReject }) {
           ✓ Approve & Send
         </button>
         <button
-          onClick={onReject}
+          onClick={handleReject}
           className="flex-1 bg-gradient-to-r from-gray-500 to-gray-600 text-white py-4 px-6 rounded-xl hover:from-gray-600 hover:to-gray-700 font-bold text-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200"
         >
-          ⚠️ Flag for Review
+          ❌ Reject
         </button>
       </div>
     </div>

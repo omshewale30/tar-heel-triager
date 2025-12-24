@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from azure.identity import ClientSecretCredential
 import asyncio
 import httpx
+import re
 
 
 
@@ -94,41 +95,35 @@ class EmailReader:
             )
             return response.status_code == 200
     
-    async def send_email_enhanced(self, to: List[str], subject: str, body: str,
-                                cc: Optional[List[str]] = None,
-                                bcc: Optional[List[str]] = None,
-                                importance: str = "normal",
-                                save_to_sent: bool = True,
-                                reply_to: Optional[str] = None) -> Dict[str, Any]:
+    async def send_reply(self, original_email_id: str, body: str, 
+                         importance: str = "normal") -> Dict[str, Any]:
         """
-        Enhanced send_email with full message capabilities
-        """
-        message = {
-            "subject": subject,
-            "body": {
-                "contentType": "html" if "<html" in body else "text",
-                "content": body
-            },
-            "importance": importance.lower()  # low, normal, high
-        }
+        Send TRUE REPLY to an existing email - maintains thread connection
         
-        # Recipients
-        message["toRecipients"] = [{"emailAddress": {"address": addr}} for addr in to]
-        if cc:
-            message["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
-        if bcc:
-            message["bccRecipients"] = [{"emailAddress": {"address": addr}} for addr in bcc]
-        if reply_to:
-            message["replyTo"] = [{"emailAddress": {"address": reply_to}}]
+        Uses /me/messages/{id}/reply endpoint instead of sendMail
+        Automatically sets: In-Reply-To, References, Thread-Index headers
+        """
+        # First, get the original message to validate it exists and get thread info
+        original_msg = await self._get_single_message(original_email_id)
+        if not original_msg:
+            return {"success": False, "message": "Original email not found"}
+        
+        # Format body as HTML for proper display
+        formatted_body = self._format_as_html(body)
         
         payload = {
-            "message": message,
-            "saveToSentItems": save_to_sent
+            "message": {
+                "importance": importance.lower(),
+                "body": {
+                    "contentType": "html",
+                    "content": formatted_body
+                }
+            }
         }
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{self.base_url}/me/sendMail",
+                f"{self.base_url}/me/messages/{original_email_id}/reply",
                 headers=self.headers,
                 json=payload
             )
@@ -136,8 +131,46 @@ class EmailReader:
             return {
                 "success": response.status_code in [200, 202],
                 "status_code": response.status_code,
-                "message": response.text if not response.is_success else "Email sent successfully"
+                "message": response.text if not response.is_success else "Reply sent successfully",
+                "thread_id": original_msg.get("conversationId")
             }
+    
+    def _format_as_html(self, body: str) -> str:
+        """Convert plain text to HTML with proper formatting"""
+        # Check if already HTML
+        if "<html" in body.lower() or "<p>" in body.lower() or "<br" in body.lower():
+            return body
+        
+        # Escape HTML special characters
+        escaped = body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        
+        # Convert markdown-style formatting
+        lines = escaped.splitlines()
+        html_lines = []
+        
+        for line in lines:
+            # Convert **bold** to <strong>
+            line = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', line)
+            # Convert bullet points
+            if line.strip().startswith('- ') or line.strip().startswith('• '):
+                line = '• ' + line.strip()[2:]
+            html_lines.append(line)
+        
+        # Join with <br> tags and wrap in paragraph
+        formatted = "<br>".join(html_lines)
+        return f"<div style='font-family: Calibri, Arial, sans-serif; font-size: 11pt;'>{formatted}</div>"
+
+    async def _get_single_message(self, message_id: str) -> Dict[str, Any]:
+        """Helper: Fetch single message by ID"""
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/me/messages/{message_id}",
+                headers=self.headers
+            )
+            if response.status_code == 200:
+                return response.json()
+            return None
+
 
 
 if __name__ == "__main__":

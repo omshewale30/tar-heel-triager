@@ -77,6 +77,10 @@ class ApproveResponse(BaseModel):
     staff_edits: Optional[str] = ""
 
 
+class RejectResponse(BaseModel):
+    approval_id: str
+
+
 @app.get("/")
 async def root():
     """Root endpoint"""
@@ -197,9 +201,8 @@ async def approve_response(request: ApproveResponse, access_token: HTTPAuthoriza
         email_reader = EmailReader(access_token=access_token.credentials)
         print(f"Sending email to {approval.sender_email} with subject {approval.subject} and body {final_response}")
         # Send reply using approval record data
-        send_result = await email_reader.send_email_enhanced(
-            to=[approval.sender_email],
-            subject=f"Re: {approval.subject}",
+        send_result = await email_reader.send_reply(
+            original_email_id=approval.email_id,
             body=final_response
         )
 
@@ -250,7 +253,7 @@ async def get_approval_queue():
     Get pending emails that need to be approved, from most recent to oldest
     """
     try:
-        results = db.query(ApprovalQueue).filter_by(approved=False).order_by(ApprovalQueue.created_at.desc()).all()
+        results = db.query(ApprovalQueue).filter_by(approved=False, rejected=False).order_by(ApprovalQueue.created_at.desc()).all()
         
         # Convert to dict for JSON serialization
         return [{
@@ -297,10 +300,17 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
         human_emails, agent_emails = await classifier.classify_emails(emails)
         
         processed_count = 0
+        skipped_count = 0
         
         # Process only AI_AGENT emails - generate responses and store
         for classification in agent_emails:
             email = classification.email
+            
+            # Check if email already exists in approval queue and is not rejected or approved
+            existing = db.query(ApprovalQueue).filter_by(email_id=email.id, rejected=False, approved=False).first()
+            if existing:
+                skipped_count += 1
+                continue
             
             # Generate AI response
             response = await agent.query_agent(email.subject, email.body)
@@ -328,8 +338,9 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
         
         return {
             "status": "success",
-            "message": f"Processed {processed_count} emails for AI response",
+            "message": f"Processed {processed_count} new emails, skipped {skipped_count} already in queue",
             "processed": processed_count,
+            "already_in_queue": skipped_count,
             "human_skipped": len(human_emails)
         }
 
@@ -374,6 +385,50 @@ async def fetch_user_emails(request: HTTPAuthorizationCredentials = Depends(secu
         raise HTTPException(status_code=e.response.status_code, detail=f"Graph API error: {e.response.text}")
 
 
+@app.post("/reject-response")
+async def reject_response(request: RejectResponse):
+    """
+    Rejects an email by marking it as rejected
+    """
+    try:
+        approval = db.query(ApprovalQueue).filter_by(id=request.approval_id).first()
+        if not approval:
+            raise HTTPException(status_code=404, detail="Approval not found")
+        
+        approval.rejected = True
+        approval.rejected_at = datetime.now()
+        
+        
+
+        email_history = EmailHistory(
+            email_id=approval.email_id,
+            subject=approval.subject,
+            sender_email=approval.sender_email,
+            route=approval.route,
+            final_response=None,
+            confidence=approval.confidence,
+            approval_status='rejected',
+            processed_at=datetime.now()
+        )
+        db.add(email_history)
+
+        print(f"Email history added {email_history.email_id}")
+
+        print(f"Approval record updated {approval.email_id}")
+
+        db.commit()
+
+        print(f"Email marked as rejected {approval.email_id}")
+
+        return {
+            "status": "success",
+            "message": "Email marked as rejected",
+            "approval_id": request.approval_id
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Error in reject_response: {e}")
+        raise HTTPException(status_code=500, detail=str(e))   
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""

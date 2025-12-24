@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import ApprovalPanel from '../components/ApprovalPanel';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
-import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue } from '../api';
+import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue, rejectResponse } from '../api';
 import { useMsal } from '@azure/msal-react';
 
 function DashboardContent() {
@@ -31,7 +31,7 @@ function DashboardContent() {
 
   const handleApprove = async (approvalId, editedResponse) => {
     try {
-      const response = await approveResponse(approvalId, editedResponse);
+      const response = await approveResponse(approvalId, editedResponse, instance, accounts);
 
       if (response.ok) {
         alert('Response sent successfully!');
@@ -47,9 +47,19 @@ function DashboardContent() {
   };
 
   const handleReject = async (approvalId) => {
-    alert('Email flagged for review');
-    loadApprovalQueue();
-    setSelectedEmail(null);
+    try {
+      const response = await rejectResponse(approvalId);
+      if (response.ok) {
+        alert('Email marked as rejected');
+        loadApprovalQueue();
+        setSelectedEmail(null);
+      } else {
+        alert('Failed to mark email as rejected');
+      }
+    } catch (error) {
+      console.error('Error rejecting response:', error);
+      alert('Error marking email as rejected');
+    }
   };
 
   const handleFetchEmails = async () => {
