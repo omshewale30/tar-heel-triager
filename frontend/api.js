@@ -148,3 +148,14 @@ export const fetchTriageEmails = async (instance, accounts) => {
 
     return response;
 };
+
+export const getEmailHistory = async () => {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/email-history`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+
+    return response;
+};

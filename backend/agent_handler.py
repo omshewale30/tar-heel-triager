@@ -124,9 +124,12 @@ class AzureAIFoundryAgent:
         
         except Exception as e:
             print(f"Error querying agent: {e}")
+            # Return None response so the email gets skipped (not added to queue)
+            # rather than blocking the entire triage process
             return {
                 'response': None,
                 'error': str(e),
+                'retryable': 'timeout' in str(e).lower() or '408' in str(e) or '401' in str(e)
             }
 
 
