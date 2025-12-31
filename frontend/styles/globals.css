@@ -1,6 +1,70 @@
 @import "tailwindcss";
 
-/* Custom styles for better UI */
+/* ========================================
+   Theme CSS Variables
+   ======================================== */
+
+:root {
+  /* Brand colors (constant across themes) */
+  --color-brand: #7BAFD4;
+  --color-brand-hover: #6AA3CC;
+  --color-brand-dark: #5A9AC4;
+  --color-navy: #0B1F3A;
+}
+
+/* Dark Theme (default) */
+:root,
+[data-theme="dark"] {
+  --color-bg-primary: #050B16;
+  --color-bg-secondary: #070F22;
+  --color-bg-card: rgba(255, 255, 255, 0.1);
+  --color-bg-card-hover: rgba(255, 255, 255, 0.15);
+  --color-bg-input: rgba(5, 11, 22, 0.6);
+  
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-hover: rgba(255, 255, 255, 0.2);
+  
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  
+  --color-glow: rgba(123, 175, 212, 0.35);
+  --color-glow-secondary: rgba(11, 31, 58, 0.55);
+  
+  /* Scrollbar */
+  --scrollbar-track: #1a1f2e;
+  --scrollbar-thumb: #374151;
+  --scrollbar-thumb-hover: #4b5563;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+  --color-bg-primary: #f8fafc;
+  --color-bg-secondary: #f1f5f9;
+  --color-bg-card: rgba(255, 255, 255, 0.9);
+  --color-bg-card-hover: rgba(255, 255, 255, 1);
+  --color-bg-input: rgba(255, 255, 255, 0.8);
+  
+  --color-border: rgba(0, 0, 0, 0.1);
+  --color-border-hover: rgba(0, 0, 0, 0.15);
+  
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  
+  --color-glow: rgba(123, 175, 212, 0.15);
+  --color-glow-secondary: rgba(11, 31, 58, 0.08);
+  
+  /* Scrollbar */
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+}
+
+/* ========================================
+   Base Styles
+   ======================================== */
+
 * {
   box-sizing: border-box;
 }
@@ -25,20 +89,23 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--scrollbar-track);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a0aec0;
+  background: var(--scrollbar-thumb-hover);
 }
 
-/* Animation utilities */
+/* ========================================
+   Animation Utilities
+   ======================================== */
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -73,15 +140,76 @@ html {
   .animate-float {
     animation: none;
   }
+  .animate-fade-in {
+    animation: none;
+  }
 }
 
-/* Focus styles for accessibility */
-/* Brand focus: Carolina Blue */
+/* Theme toggle transition */
+@keyframes themeSwitch {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(0.8);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+.theme-toggle-icon {
+  transition: transform 0.3s ease;
+}
+
+.theme-toggle-icon:hover {
+  transform: rotate(15deg);
+}
+
+/* ========================================
+   Focus Styles for Accessibility
+   ======================================== */
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #7BAFD4;
+  outline: 2px solid var(--color-brand);
   outline-offset: 2px;
+}
+
+/* ========================================
+   Theme-aware utility classes
+   ======================================== */
+
+/* Background classes */
+.theme-bg-primary {
+  background-color: var(--color-bg-primary);
+}
+
+.theme-bg-secondary {
+  background-color: var(--color-bg-secondary);
+}
+
+.theme-bg-card {
+  background-color: var(--color-bg-card);
+}
+
+/* Text classes */
+.theme-text-primary {
+  color: var(--color-text-primary);
+}
+
+.theme-text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.theme-text-muted {
+  color: var(--color-text-muted);
+}
+
+/* Border classes */
+.theme-border {
+  border-color: var(--color-border);
 }
