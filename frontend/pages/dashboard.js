@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ApprovalPanel from '../components/ApprovalPanel';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
-import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue, rejectResponse } from '../api';
+import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue, rejectResponse, deleteApproval } from '../api';
 import { useMsal } from '@azure/msal-react';
 import Head from 'next/head';
 import { useTheme } from '../lib/ThemeContext';
@@ -91,6 +91,7 @@ function DashboardContent() {
   }, []);
 
   useEffect(() => {
+    
     loadApprovalQueue();
   }, [filterRoute]);
 
@@ -140,6 +141,25 @@ function DashboardContent() {
     } catch (error) {
       console.error('Error rejecting response:', error);
       showToast('Error marking email as rejected', 'error');
+    }
+  };
+
+  const handleDelete = async (e, approvalId) => {
+    e.stopPropagation(); // Prevent card selection when clicking delete
+    try {
+      const response = await deleteApproval(approvalId);
+      if (response.ok) {
+        showToast('Email deleted from queue', 'success');
+        loadApprovalQueue();
+        if (selectedEmail?.id === approvalId) {
+          setSelectedEmail(null);
+        }
+      } else {
+        showToast('Failed to delete email', 'error');
+      }
+    } catch (error) {
+      console.error('Error deleting email:', error);
+      showToast('Error deleting email', 'error');
     }
   };
 
@@ -401,18 +421,33 @@ function DashboardContent() {
                     </div>
                   ) : (
                     approvalQueue.map((email) => (
-                      <button
+                      <div
                         key={email.id}
-                        onClick={() => setSelectedEmail(email)}
-                        className={`w-full text-left p-4 rounded-xl ring-1 transition-all duration-200 ${
+                        className={`relative w-full text-left p-4 rounded-xl ring-1 transition-all duration-200 cursor-pointer ${
                           selectedEmail?.id === email.id
                             ? 'bg-[#7BAFD4]/20 ring-[#7BAFD4]/40 shadow-lg shadow-[#7BAFD4]/10'
                             : isDark 
                               ? 'bg-white/5 ring-white/10 hover:bg-white/10 hover:ring-white/20'
                               : 'bg-slate-50 ring-slate-200 hover:bg-slate-100 hover:ring-slate-300'
                         }`}
+                        onClick={() => setSelectedEmail(email)}
                       >
-                        <div className="flex items-start justify-between gap-3 mb-2">
+                        {/* Delete button */}
+                        <button
+                          onClick={(e) => handleDelete(e, email.id)}
+                          className={`absolute top-2 right-2 p-1 rounded-md transition-all duration-200 opacity-60 hover:opacity-100 ${
+                            isDark 
+                              ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' 
+                              : 'hover:bg-red-50 text-slate-400 hover:text-red-500'
+                          }`}
+                          aria-label="Delete email from queue"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+
+                        <div className="flex items-start justify-between gap-3 mb-2 pr-6">
                           <div className={`text-sm font-semibold line-clamp-2 flex-1 ${
                             isDark ? 'text-white' : 'text-slate-900'
                           }`}>
@@ -442,7 +477,7 @@ function DashboardContent() {
                             )}
                           </Badge>
                         </div>
-                      </button>
+                      </div>
                     ))
                   )}
                 </div>

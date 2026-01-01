@@ -52,9 +52,14 @@ class AzureAIFoundryAgent:
         self.project_client = project_client
         self.agent_id = os.getenv("AZURE_AGENT_ID")
     
-    async def query_agent(self, subject: str, email_body: str) -> Dict:
+    async def query_agent(self, subject: str, email_body: str, thread_context: str = "") -> Dict:
         """
         Send email to Azure AI Foundry agent for FAQ response
+        
+        Args:
+            subject: Email subject (used as fallback if no thread_context)
+            email_body: Current email body (used as fallback if no thread_context)
+            thread_context: Formatted thread with all messages, current marked with <<< RESPOND TO THIS
         """
         if self.project_client is None:
             raise ValueError("Project client not initialized")
@@ -66,12 +71,22 @@ class AzureAIFoundryAgent:
             )
             print(f"Created thread: {thread.id}")
 
-            # 2. Add message to thread
+            # 2. Build the message content
+            # thread_context already contains the full thread with the current email marked
+            if thread_context:
+                content = f"{thread_context}\n\nPlease generate a professional response to the message marked with '<<< RESPOND TO THIS'. Consider the full thread history for context."
+                print(f"Sending thread context ({len(thread_context)} chars)")
+            else:
+                # Fallback: use subject and body directly (shouldn't happen normally)
+                content = f"Subject: {subject}\nBody: {email_body}"
+                print("No thread context available, using subject/body directly")
+
+            # 3. Add message to thread
             message = await asyncio.to_thread(
                 self.project_client.agents.messages.create,
                 thread_id=thread.id,
                 role="user",
-                content=f"Subject: {subject}\nBody: {email_body}"
+                content=content
             )
             print(f"Created message: {message.id}")
 

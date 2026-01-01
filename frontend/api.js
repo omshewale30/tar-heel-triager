@@ -159,3 +159,13 @@ export const getEmailHistory = async () => {
 
     return response;
 };
+
+export const deleteApproval = async (approvalId) => {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/delete-approval/${approvalId}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+    return response;
+};

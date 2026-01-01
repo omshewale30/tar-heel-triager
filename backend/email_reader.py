@@ -21,6 +21,8 @@ import re
 @dataclass
 class Email:
     id: str
+    conversation_id: Optional[str]
+    conversation_index: Optional[str]
     subject: str
     body: str
     sender: str
@@ -51,7 +53,7 @@ class EmailReader:
                 '$filter': 'isRead eq false',
                 '$top': max_results,
                 '$orderby': 'receivedDateTime desc',
-                '$select': 'id,subject,bodyPreview,from,receivedDateTime,isRead,body'
+                '$select': 'id,subject,bodyPreview,from,receivedDateTime,isRead,body,conversationId,conversationIndex'
             }
             
             response = await client.get(f"{self.base_url}/me/messages", headers=self.headers, params=params)
@@ -75,6 +77,8 @@ class EmailReader:
 
                 emails.append(Email(
                     id=msg.get('id'),
+                    conversation_id=msg.get('conversationId'),
+                    conversation_index=msg.get('conversationIndex'),
                     subject=msg.get('subject', '(No Subject)'),
                     body=body_content,
                     sender=sender_info.get('name', 'Unknown'),
@@ -82,6 +86,7 @@ class EmailReader:
                     received_at=msg.get('receivedDateTime'),
                     is_read=msg.get('isRead')
                 ))
+            
             
             return emails
 
@@ -159,6 +164,89 @@ class EmailReader:
         # Join with <br> tags and wrap in paragraph
         formatted = "<br>".join(html_lines)
         return f"<div style='font-family: Calibri, Arial, sans-serif; font-size: 11pt;'>{formatted}</div>"
+    
+    async def get_conversation_messages(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """
+        Fetch all messages in a conversation thread, ordered oldest to newest.
+        
+        Args:
+            conversation_id: The conversationId from Microsoft Graph
+            
+        Returns:
+            List of message dicts ordered by receivedDateTime (oldest first for context)
+        """
+        if not conversation_id:
+            print("No conversation_id provided, skipping thread fetch")
+            return []
+            
+        async with httpx.AsyncClient() as client:
+            # Note: Can't use $orderby with conversationId filter (Graph API limitation)
+            params = {
+                '$filter': f"conversationId eq '{conversation_id}'",
+                '$select': 'id,subject,body,bodyPreview,from,receivedDateTime,conversationIndex',
+                '$top': 25
+            }
+            print(f"🔍 Fetching thread for conversationId: {conversation_id[:50]}...")
+            response = await client.get(
+                f"{self.base_url}/me/messages",
+                headers=self.headers,
+                params=params
+            )
+            if response.status_code == 200:
+                data = response.json()
+                messages = data.get('value', [])
+                # Sort client-side: oldest first for chronological context
+                messages.sort(key=lambda m: m.get('receivedDateTime', ''))
+                print(f"✅ Found {len(messages)} messages in thread")
+                return messages
+            print(f"Failed to fetch conversation messages: {response.status_code} - {response.text[:200]}")
+            return []
+    
+    def format_thread_context(self, messages: List[Dict[str, Any]], current_email_id: str) -> str:
+        """
+        Format thread messages into a context string for the AI agent.
+        All messages in the thread are included regardless of count.
+        
+        Args:
+            messages: List of message dicts from get_conversation_messages
+            current_email_id: ID of the current unread email (to mark it for response)
+            
+        Returns:
+            Formatted string with full thread history
+        """
+        if not messages:
+            return ""
+        
+        # Different header for single vs multi-message threads
+        if len(messages) == 1:
+            context_parts = ["=== EMAIL TO RESPOND TO ===\n"]
+        else:
+            context_parts = [f"=== EMAIL THREAD ({len(messages)} messages, oldest to newest) ===\n"]
+        
+        for i, msg in enumerate(messages, 1):
+            sender_info = msg.get('from', {}).get('emailAddress', {})
+            sender_name = sender_info.get('name', 'Unknown')
+            sender_email = sender_info.get('address', 'unknown')
+            subject = msg.get('subject', '(No Subject)')
+            received = msg.get('receivedDateTime', '')[:16].replace('T', ' ')  # Format: YYYY-MM-DD HH:MM
+            
+            # Get body - prefer bodyPreview for context (cleaner, shorter)
+            body = msg.get('bodyPreview', '')
+            if not body and msg.get('body'):
+                body = msg['body'].get('content', '')[:500]  # Truncate if too long
+            
+            is_current = msg.get('id') == current_email_id
+            marker = " <<< RESPOND TO THIS" if is_current else ""
+            
+            context_parts.append(f"--- Message {i}{marker} ---")
+            context_parts.append(f"From: {sender_name} <{sender_email}>")
+            context_parts.append(f"Date: {received}")
+            context_parts.append(f"Subject: {subject}")
+            context_parts.append(f"Body: {body}")
+            context_parts.append("")
+        
+        context_parts.append("=== END OF THREAD ===\n")
+        return "\n".join(context_parts)
 
     async def _get_single_message(self, message_id: str) -> Dict[str, Any]:
         """Helper: Fetch single message by ID"""

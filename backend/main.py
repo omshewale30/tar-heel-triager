@@ -11,6 +11,7 @@ import os
 from dotenv import load_dotenv
 import httpx
 from contextlib import asynccontextmanager
+import logging
 
 # Import our modules
 from email_reader import EmailReader
@@ -45,6 +46,8 @@ app.add_middleware(
 
 security = HTTPBearer()
 # Initialize services
+
+logging.basicConfig(level=logging.WARNING)
 
 
 
@@ -287,7 +290,8 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
     try:
         email_reader = EmailReader(access_token=access_token)
         emails = await email_reader.get_unread_emails()
-        
+
+        print(f"Fetched {len(emails)} unread emails")
         if not emails:
             return {
                 "status": "success",
@@ -301,24 +305,41 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
         
         processed_count = 0
         skipped_count = 0
+     
         
         # Process only AI_AGENT emails - generate responses and store
         for classification in agent_emails:
             email = classification.email
             
-            # Check if email already exists in approval queue and is not rejected or approved
-            existing = db.query(ApprovalQueue).filter_by(email_id=email.id, rejected=False, approved=False).first()
-            if existing:
+            # Check if email already exists in approval queue (pending) or was already processed
+            existing_pending = db.query(ApprovalQueue).filter_by(email_id=email.id, rejected=False, approved=False).first()
+            existing_processed = db.query(EmailHistory).filter_by(email_id=email.id).first()
+            if existing_pending or existing_processed:
+                reason = "in pending queue" if existing_pending else "already processed in history"
+                print(f"⏭️ Skipping email '{email.body[:40]}...' - {reason}")
                 skipped_count += 1
                 continue
             
-            # Generate AI response
-            response = await agent.query_agent(email.subject, email.body)
+            # Fetch full thread context for the AI agent
+            thread_context = ""
+            try:
+                thread_messages = await email_reader.get_conversation_messages(email.conversation_id)
+                if thread_messages:
+                    thread_context = email_reader.format_thread_context(thread_messages, email.id)
+                    print(f"📧 Thread context: {len(thread_messages)} message(s) for: {email.subject[:50]}")
+            except Exception as e:
+                print(f"⚠️ Failed to fetch thread context, using single email: {e}")
+            
+            # Generate AI response with thread context
+            print(f"📧 Thread context: {thread_context}")
+            response = await agent.query_agent(email.subject, email.body, thread_context)
             
             if response and response.get('response'):
                 # Create approval record matching the schema
                 approval_record = ApprovalQueue(
                     email_id=email.id,
+                    conversation_id=email.conversation_id,
+                    conversation_index=email.conversation_index,
                     subject=email.subject,
                     sender_email=email.sender_email,
                     body=email.body,  # Original email body
@@ -429,6 +450,34 @@ async def reject_response(request: RejectResponse):
         db.rollback()
         print(f"Error in reject_response: {e}")
         raise HTTPException(status_code=500, detail=str(e))   
+class DeleteApprovalRequest(BaseModel):
+    approval_id: str
+
+
+@app.delete("/delete-approval/{approval_id}")
+async def delete_approval(approval_id: str):
+    """
+    Deletes an email from the approval queue without processing it
+    """
+    try:
+        approval = db.query(ApprovalQueue).filter_by(id=approval_id).first()
+        if not approval:
+            raise HTTPException(status_code=404, detail="Approval not found")
+        
+        db.delete(approval)
+        db.commit()
+        
+        return {
+            "status": "success",
+            "message": "Email deleted from approval queue",
+            "approval_id": approval_id
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Error in delete_approval: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/email-history")
 async def get_email_history():
     """
