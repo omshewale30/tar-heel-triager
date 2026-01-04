@@ -42,7 +42,7 @@ export const rejectResponse = async (approvalId) => {
     return response;
 };
 
-export const getApprovalQueue = async (instance, accounts) => {
+export const getApprovalQueue = async (instance, accounts, route = 'AI_AGENT') => {
     const graphScopes = ['https://graph.microsoft.com/Mail.Read'];
     if (!accounts.length) {
         throw new Error('No accounts found');
@@ -55,7 +55,7 @@ export const getApprovalQueue = async (instance, accounts) => {
 
     const accessToken = tokenResponse.accessToken;
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/approval-queue`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/approval-queue?route=${encodeURIComponent(route)}`, {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',

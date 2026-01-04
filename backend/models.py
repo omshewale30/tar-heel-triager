@@ -32,6 +32,7 @@ class ApprovalQueue(Base):
     sender_email = Column(String(255))
     body = Column(Text)
     route = Column(String(20))
+    redirect_department = Column(String(255), nullable=True)
     generated_response = Column(Text)
     final_response = Column(Text)
     confidence = Column(Float)

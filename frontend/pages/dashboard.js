@@ -77,7 +77,7 @@ function Badge({ children, variant = 'default', isDark = true }) {
 function DashboardContent() {
   const [approvalQueue, setApprovalQueue] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState(null);
-  const [filterRoute, setFilterRoute] = useState('all');
+  const [filterRoute, setFilterRoute] = useState('AI_AGENT');
   const [fetchingEmails, setFetchingEmails] = useState(false);
   const [fetchStatus, setFetchStatus] = useState(null);
   const [fetchingTriage, setFetchingTriage] = useState(false);
@@ -101,7 +101,7 @@ function DashboardContent() {
 
   const loadApprovalQueue = async () => {
     try {
-      const response = await getApprovalQueue(instance, accounts);
+      const response = await getApprovalQueue(instance, accounts, filterRoute);
       if (response.ok) {
         const data = await response.json();
         setApprovalQueue(data);
@@ -402,9 +402,9 @@ function DashboardContent() {
                         : 'bg-slate-50 text-slate-900 ring-slate-200'
                     }`}
                   >
-                    <option value="all">📧 All Emails</option>
                     <option value="AI_AGENT">🤖 AI Agent (Ready to Send)</option>
                     <option value="HUMAN_REQUIRED">👤 Human Required</option>
+                    <option value="REDIRECT">↪️ Redirect</option>
                   </select>
                 </div>
 
@@ -459,10 +459,16 @@ function DashboardContent() {
                             </Badge>
                           )}
                         </div>
-                        <div className={`text-xs mb-3 truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        <div className={`text-xs mb-2 truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                           {email.sender_email}
                         </div>
-                        <div>
+                        {email.route === 'REDIRECT' && email.redirect_department && (
+                          <div className={`text-xs mb-3 flex items-center gap-1.5 ${isDark ? 'text-[#7BAFD4]' : 'text-[#0B1F3A]'}`}>
+                            <span aria-hidden="true">↪️</span>
+                            <span className="font-medium">{email.redirect_department}</span>
+                          </div>
+                        )}
+                        <div className={email.route !== 'REDIRECT' ? 'mt-1' : ''}>
                           <Badge variant={email.route === 'AI_AGENT' ? 'success' : 'warning'} isDark={isDark}>
                             {email.route === 'AI_AGENT' ? (
                               <>
@@ -519,13 +525,21 @@ function DashboardContent() {
                             </span>
                           </div>
                         )}
-                        <div className="flex items-center gap-4 pt-2">
+                        <div className="flex items-center gap-4 pt-2 flex-wrap">
                           <div className="flex flex-col gap-1">
                             <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Route</span>
                             <Badge variant={selectedEmail.route === 'AI_AGENT' ? 'success' : 'warning'} isDark={isDark}>
-                              {selectedEmail.route === 'AI_AGENT' ? '🤖 AI Agent' : '👤 Human Required'}
+                              {selectedEmail.route === 'AI_AGENT' ? '🤖 AI Agent' : selectedEmail.route === 'REDIRECT' ? '↪️ Redirect' : '👤 Human Required'}
                             </Badge>
                           </div>
+                          {selectedEmail.route === 'REDIRECT' && selectedEmail.redirect_department && (
+                            <div className="flex flex-col gap-1">
+                              <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Department</span>
+                              <Badge variant="info" isDark={isDark}>
+                                {selectedEmail.redirect_department}
+                              </Badge>
+                            </div>
+                          )}
                           {selectedEmail.confidence && (
                             <div className="flex flex-col gap-1">
                               <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Confidence</span>

@@ -21,6 +21,7 @@ class EmailClassification(BaseModel):
     route: str
     confidence: float
     reason: str
+    redirect_department: Optional[str] = None
 
 class EmailClassifier:
     """Email classification using Azure AI Foundry llm"""
@@ -36,18 +37,19 @@ class EmailClassifier:
         
         self.llm = llm
     
-    async def classify_emails(self, emails: list[Email]) -> tuple[list[EmailClassification], list[EmailClassification]]:
+    async def classify_emails(self, emails: list[Email]) -> tuple[list[EmailClassification], list[EmailClassification], list[EmailClassification]]:
         """
-        Classify emails, the llm will return a list of dictionaries, each dictionary is a classification result for an email
-        the classification will be either 'AI_AGENT' or 'HUMAN_REQUIRED'
+        Classify emails, the llm will return a list of dictionaries, each dictionary is a classification result for an 
+        email thread, the classification will be either 'AI_AGENT' or 'HUMAN_REQUIRED' or 'REDIRECT'
         
         Returns:
-            tuple[list[EmailClassification], list[EmailClassification]]
+            tuple[list[EmailClassification], list[EmailClassification], list[EmailClassification]]
         """
         prompt = triage_prompt
         classifications = []
         agent_emails = []
-
+        human_emails = []
+        redirect_emails = []
         for email in emails:
             try:
                 response = self.llm.chat.completions.create(
@@ -69,8 +71,8 @@ class EmailClassifier:
                             reason=result['reason']
                         )
                     )
-                else:
-                    classifications.append(
+                elif result['route'] == 'HUMAN_REQUIRED':
+                    human_emails.append(
                     EmailClassification(
                         email_id=email.id,
                         email=email,
@@ -78,7 +80,15 @@ class EmailClassifier:
                         confidence=result['confidence'],
                         reason=result['reason']
                     ))
-                    
+                elif result['route'] == 'REDIRECT':
+                    redirect_emails.append(EmailClassification(
+                        email_id=email.id,
+                        email=email,
+                        route='REDIRECT',
+                        redirect_department=result['department'],
+                        confidence=result['confidence'],
+                        reason=result['reason']
+                    ))
                 
             except Exception as e:
                 print(f"Error classifying email: {e}")
@@ -91,4 +101,4 @@ class EmailClassifier:
                 ))
                 continue
 
-        return classifications, agent_emails
+        return human_emails, agent_emails, redirect_emails

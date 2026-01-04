@@ -251,12 +251,13 @@ async def approve_response(request: ApproveResponse, access_token: HTTPAuthoriza
 
 
 @app.get("/approval-queue")
-async def get_approval_queue():
+async def get_approval_queue(route: str = "AI_AGENT"):
     """
-    Get pending emails that need to be approved, from most recent to oldest
+    Get pending emails that need to be approved, from most recent to oldest.
+    Filter by route (AI_AGENT, REDIRECT, or HUMAN_REQUIRED). Defaults to AI_AGENT.
     """
     try:
-        results = db.query(ApprovalQueue).filter_by(approved=False, rejected=False).order_by(ApprovalQueue.created_at.desc()).all()
+        results = db.query(ApprovalQueue).filter_by(approved=False, rejected=False, route=route).order_by(ApprovalQueue.created_at.desc()).all()
         
         # Convert to dict for JSON serialization
         return [{
@@ -267,6 +268,7 @@ async def get_approval_queue():
             'body': result.body,
             'generated_response': result.generated_response,
             'route': result.route,
+            'redirect_department': result.redirect_department,
             'confidence': result.confidence,
             'created_at': result.created_at.isoformat() if result.created_at else None
         } for result in results]
@@ -300,24 +302,67 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
                 "human_skipped": 0
             }
 
-        # Classify emails into HUMAN_REQUIRED and AI_AGENT
-        human_emails, agent_emails = await classifier.classify_emails(emails)
+        # Classify emails into HUMAN_REQUIRED, AI_AGENT, and REDIRECT
+        human_emails, agent_emails, redirect_emails = await classifier.classify_emails(emails)
         
-        processed_count = 0
-        skipped_count = 0
-     
+        counts = {"processed": 0, "skipped": 0, "human": 0, "redirect": 0, "ai_agent": 0}
         
-        # Process only AI_AGENT emails - generate responses and store
+        def is_duplicate(email_id: str) -> bool:
+            """Check if email already exists in pending queue or history"""
+            existing_pending = db.query(ApprovalQueue).filter_by(email_id=email_id, rejected=False, approved=False).first()
+            existing_processed = db.query(EmailHistory).filter_by(email_id=email_id).first()
+            return existing_pending is not None or existing_processed is not None
+        
+        # Process REDIRECT emails
+        for classification in redirect_emails:
+            email = classification.email
+            if is_duplicate(email.id):
+                counts["skipped"] += 1
+                continue
+            
+            db.add(ApprovalQueue(
+                email_id=email.id,
+                conversation_id=email.conversation_id,
+                conversation_index=email.conversation_index,
+                subject=email.subject,
+                sender_email=email.sender_email,
+                body=email.body,
+                route='REDIRECT',
+                redirect_department=classification.redirect_department,
+                confidence=classification.confidence,
+                agent_used=False,
+                approved=False,
+                created_at=datetime.now()
+            ))
+            counts["redirect"] += 1
+        
+        # Process HUMAN_REQUIRED emails
+        for classification in human_emails:
+            email = classification.email
+            if is_duplicate(email.id):
+                counts["skipped"] += 1
+                continue
+            
+            db.add(ApprovalQueue(
+                email_id=email.id,
+                conversation_id=email.conversation_id,
+                conversation_index=email.conversation_index,
+                subject=email.subject,
+                sender_email=email.sender_email,
+                body=email.body,
+                route='HUMAN_REQUIRED',
+                confidence=classification.confidence,
+                agent_used=False,
+                approved=False,
+                created_at=datetime.now()
+            ))
+            counts["human"] += 1
+        
+        # Process AI_AGENT emails - generate responses and store
         for classification in agent_emails:
             email = classification.email
-            
-            # Check if email already exists in approval queue (pending) or was already processed
-            existing_pending = db.query(ApprovalQueue).filter_by(email_id=email.id, rejected=False, approved=False).first()
-            existing_processed = db.query(EmailHistory).filter_by(email_id=email.id).first()
-            if existing_pending or existing_processed:
-                reason = "in pending queue" if existing_pending else "already processed in history"
-                print(f"⏭️ Skipping email '{email.body[:40]}...' - {reason}")
-                skipped_count += 1
+            if is_duplicate(email.id):
+                counts["skipped"] += 1
                 continue
             
             # Fetch full thread context for the AI agent
@@ -331,38 +376,38 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
                 print(f"⚠️ Failed to fetch thread context, using single email: {e}")
             
             # Generate AI response with thread context
-            print(f"📧 Thread context: {thread_context}")
             response = await agent.query_agent(email.subject, email.body, thread_context)
             
             if response and response.get('response'):
-                # Create approval record matching the schema
-                approval_record = ApprovalQueue(
+                db.add(ApprovalQueue(
                     email_id=email.id,
                     conversation_id=email.conversation_id,
                     conversation_index=email.conversation_index,
                     subject=email.subject,
                     sender_email=email.sender_email,
-                    body=email.body,  # Original email body
+                    body=email.body,
                     route='AI_AGENT',
-                    generated_response=response['response'],  # AI-generated response
+                    generated_response=response['response'],
                     confidence=classification.confidence,
                     agent_used=True,
                     approved=False,
                     created_at=datetime.now()
-                )
-                db.add(approval_record)
-                processed_count += 1
+                ))
+                counts["ai_agent"] += 1
         
         # Commit all records at once
-        if processed_count > 0:
+        counts["processed"] = counts["redirect"] + counts["human"] + counts["ai_agent"]
+        if counts["processed"] > 0:
             db.commit()
         
         return {
             "status": "success",
-            "message": f"Processed {processed_count} new emails, skipped {skipped_count} already in queue",
-            "processed": processed_count,
-            "already_in_queue": skipped_count,
-            "human_skipped": len(human_emails)
+            "message": f"Processed {counts['processed']} emails ({counts['ai_agent']} AI, {counts['human']} human, {counts['redirect']} redirect), skipped {counts['skipped']}",
+            "processed": counts["processed"],
+            "ai_agent": counts["ai_agent"],
+            "human_required": counts["human"],
+            "redirect": counts["redirect"],
+            "skipped": counts["skipped"]
         }
 
     except httpx.HTTPStatusError as e:
