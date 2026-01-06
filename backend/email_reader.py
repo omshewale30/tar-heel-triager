@@ -202,6 +202,41 @@ class EmailReader:
             print(f"Failed to fetch conversation messages: {response.status_code} - {response.text[:200]}")
             return []
     
+    def format_thread_classification_context(self, messages: List[Dict[str, Any]], current_email_id: str) -> str:
+        """
+        Format thread messages into a context string for the LLM to classify the thread into 'AI_AGENT' or 'HUMAN_REQUIRED' or 'REDIRECT'.
+        All messages in the thread are included regardless of count.
+        
+        Args:
+            messages: List of message dicts from get_conversation_messages
+            current_email_id: ID of the current unread email (to mark it for response)
+        """
+        if not messages:
+            return ""
+
+        context_parts = ["=== EMAIL THREAD (MULTIPLE MESSAGES) ===\n"]
+        
+        for i, msg in enumerate(messages, 1):
+            sender_info = msg.get('from', {}).get('emailAddress', {})
+            sender_name = sender_info.get('name', 'Unknown')
+            sender_email = sender_info.get('address', 'unknown')
+            subject = msg.get('subject', '(No Subject)')
+            received = msg.get('receivedDateTime', '')[:16].replace('T', ' ')  # Format: YYYY-MM-DD HH:MM
+            body = msg.get('bodyPreview', '')
+            if not body and msg.get('body'):
+                body = msg['body'].get('content', '')[:500]  # Truncate if too long
+            is_current = msg.get('id') == current_email_id
+            marker = " <<< Current Message" if is_current else ""
+            context_parts.append(f"--- Message {i}{marker} ---")
+            context_parts.append(f"From: {sender_name} <{sender_email}>")
+            context_parts.append(f"Date: {received}")
+            context_parts.append(f"Subject: {subject}")
+            context_parts.append(f"Body: {body}")
+            context_parts.append("")
+        context_parts.append("=== END OF THREAD ===\n")
+        return "\n".join(context_parts)
+        
+    
     def format_thread_context(self, messages: List[Dict[str, Any]], current_email_id: str) -> str:
         """
         Format thread messages into a context string for the AI agent.
@@ -233,7 +268,7 @@ class EmailReader:
             # Get body - prefer bodyPreview for context (cleaner, shorter)
             body = msg.get('bodyPreview', '')
             if not body and msg.get('body'):
-                body = msg['body'].get('content', '')[:500]  # Truncate if too long
+                body = msg['body'].get('content', '')
             
             is_current = msg.get('id') == current_email_id
             marker = " <<< RESPOND TO THIS" if is_current else ""

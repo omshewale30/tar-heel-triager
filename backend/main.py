@@ -302,8 +302,21 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
                 "human_skipped": 0
             }
 
-        # Classify emails into HUMAN_REQUIRED, AI_AGENT, and REDIRECT
-        human_emails, agent_emails, redirect_emails = await classifier.classify_emails(emails)
+        # Fetch thread context for all emails before classification
+        email_threads_dict = {}
+        for email in emails:
+            if not email.conversation_id:
+                email_threads_dict[email.id] = []
+                continue
+            try:
+                thread_messages = await email_reader.get_conversation_messages(email.conversation_id)
+                email_threads_dict[email.id] = thread_messages
+            except Exception as e:
+                print(f"⚠️ Thread fetch failed for {email.id}: {e}")
+                email_threads_dict[email.id] = []
+
+        # Classify emails into HUMAN_REQUIRED, AI_AGENT, and REDIRECT (with thread context)
+        human_emails, agent_emails, redirect_emails = await classifier.classify_emails(emails, email_threads_dict, email_reader)
         
         counts = {"processed": 0, "skipped": 0, "human": 0, "redirect": 0, "ai_agent": 0}
         
@@ -367,13 +380,10 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
             
             # Fetch full thread context for the AI agent
             thread_context = ""
-            try:
-                thread_messages = await email_reader.get_conversation_messages(email.conversation_id)
-                if thread_messages:
-                    thread_context = email_reader.format_thread_context(thread_messages, email.id)
-                    print(f"📧 Thread context: {len(thread_messages)} message(s) for: {email.subject[:50]}")
-            except Exception as e:
-                print(f"⚠️ Failed to fetch thread context, using single email: {e}")
+            thread_messages = email_threads_dict.get(email.id, [])
+            if thread_messages:
+                print(f"Thread messages: length {len(thread_messages)}")
+                thread_context = email_reader.format_thread_context(thread_messages, email.id)
             
             # Generate AI response with thread context
             response = await agent.query_agent(email.subject, email.body, thread_context)

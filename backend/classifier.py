@@ -4,7 +4,7 @@ Classifies student billing emails and determines if they're FAQ-eligible
 """
 import json
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from openai import AzureOpenAI
 from dotenv import load_dotenv
 from azure.azure_ai_client import AzureAIClient
@@ -37,26 +37,49 @@ class EmailClassifier:
         
         self.llm = llm
     
-    async def classify_emails(self, emails: list[Email]) -> tuple[list[EmailClassification], list[EmailClassification], list[EmailClassification]]:
+    async def classify_emails(self, emails: list[Email], email_threads_dict: dict[str, list[dict[str, Any]]], email_reader) -> tuple[list[EmailClassification], list[EmailClassification], list[EmailClassification]]:
         """
         Classify emails, the llm will return a list of dictionaries, each dictionary is a classification result for an 
         email thread, the classification will be either 'AI_AGENT' or 'HUMAN_REQUIRED' or 'REDIRECT'
+        
+        Args:
+            emails: List of Email objects to classify
+            email_threads_dict: Dict mapping email_id -> list of thread messages
+            email_reader: EmailReader instance for formatting thread context
         
         Returns:
             tuple[list[EmailClassification], list[EmailClassification], list[EmailClassification]]
         """
         prompt = triage_prompt
-        classifications = []
         agent_emails = []
         human_emails = []
         redirect_emails = []
+        
         for email in emails:
+            thread_messages = email_threads_dict.get(email.id, [])
+            
+            # Format context based on whether it's a thread or single email
+            if thread_messages and len(thread_messages) > 1:
+                # Multi-message thread - use full thread context for accurate classification
+                user_content = email_reader.format_thread_classification_context(thread_messages, email.id)
+            else:
+                # Single email - just use subject and body
+                usercontent = "=== EMAIL TO CLASSIFY (SINGLE MESSAGE) ===\n"
+                usercontent += f"From: {email.sender} <{email.sender_email}>\n"
+                usercontent += f"Date: {email.received_at}\n"
+                usercontent += f"Subject: {email.subject}\n"
+                usercontent += f"Body: {email.body}\n"
+                usercontent += "=== END OF EMAIL ===\n"
+                user_content = usercontent
+            
+            print(f'Thread context: {user_content}')
+            
             try:
                 response = self.llm.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": prompt},
-                        {"role": "user", "content": f"Subject: {email.subject}\nBody: {email.body}"}
+                        {"role": "user", "content": user_content}
                     ]
                 )
                 # Parse the JSON string response
@@ -92,13 +115,6 @@ class EmailClassifier:
                 
             except Exception as e:
                 print(f"Error classifying email: {e}")
-                classifications.append(EmailClassification(
-                    email_id=email.id,
-                    email=email,
-                    route='HUMAN_REQUIRED',
-                    confidence=0.0,
-                    reason=f'Classification error: {str(e)}'
-                ))
                 continue
 
         return human_emails, agent_emails, redirect_emails

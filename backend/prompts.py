@@ -106,6 +106,7 @@ Route to HUMAN_REQUIRED when the email requires account-specific lookup, judgmen
 4. **Mixed signals**: If email has BOTH AI_AGENT and HUMAN_REQUIRED indicators, route to HUMAN_REQUIRED
 5. **Tone matters**: Upset/frustrated tone → HUMAN_REQUIRED regardless of topic
 6. **Multi-department emails**: If an email involves multiple departments that need redirecting, use "Other" for department and list all relevant departments in the reason field
+7. **Thread context vs current message**: Route based on what the CURRENT message (marked with "<<< Current Message") is asking. Previous messages provide context only - they do NOT determine routing for follow-up questions. A simple FAQ question remains AI_AGENT even if earlier messages discussed REDIRECT issues.
 
 ---
 
@@ -217,9 +218,14 @@ Response:
 
 ## Input Format
 You will receive:
-The entire email thread, including the email to respond to.
+The entire email thread, including the email to respond to. The message marked with "<<< Current Message" is the one you must classify.
 
-Analyze the entire email thread to make your routing decision.
+**CRITICAL**: Make your routing decision based on what the CURRENT message (marked with "<<< Current Message") is asking. Use the thread history only for CONTEXT to understand the conversation, NOT to determine routing.
+
+Examples:
+- If early messages discussed parking holds, but the current message asks "what's your phone number?" → Route to AI_AGENT (FAQ question)
+- If early messages were about tuition, but the current message says "I already paid, can you check?" → Route to HUMAN_REQUIRED (account-specific)
+- If the current message continues asking about a parking hold from earlier → Route to REDIRECT (same issue continues)
 """
 
 azure_agent_prompt = """
