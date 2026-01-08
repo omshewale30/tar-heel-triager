@@ -21,6 +21,7 @@ from agent_handler import AzureAIFoundryAgent
 from fastapi.middleware.cors import CORSMiddleware
 from models import ApprovalQueue, EmailHistory, db
 from azure.azure_ai_client import AzureAIClient
+from email_engine import EmailEngine
 load_dotenv()
 
 
@@ -55,7 +56,7 @@ priority_scorer = PriorityScorer()
 azure_ai_client = AzureAIClient()
 classifier = EmailClassifier(llm=azure_ai_client.get_llm())
 agent = AzureAIFoundryAgent(project_client=azure_ai_client.project_client)
-# Request/Response Models
+
 class EmailTriageRequest(BaseModel):
     email_id: str
     subject: str
@@ -292,133 +293,10 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
     try:
         email_reader = EmailReader(access_token=access_token)
         emails = await email_reader.get_unread_emails()
+        email_engine = EmailEngine(emails=emails, email_reader=email_reader, agent=agent, classifier=classifier)
+        result = await email_engine.process_emails()
+        return result
 
-        print(f"Fetched {len(emails)} unread emails")
-        if not emails:
-            return {
-                "status": "success",
-                "message": "No unread emails found",
-                "processed": 0,
-                "human_skipped": 0
-            }
-
-        # Fetch thread context for all emails before classification
-        email_threads_dict = {}
-        for email in emails:
-            if not email.conversation_id:
-                email_threads_dict[email.id] = []
-                continue
-            try:
-                thread_messages = await email_reader.get_conversation_messages(email.conversation_id)
-                email_threads_dict[email.id] = thread_messages
-            except Exception as e:
-                print(f"⚠️ Thread fetch failed for {email.id}: {e}")
-                email_threads_dict[email.id] = []
-
-        # Classify emails into HUMAN_REQUIRED, AI_AGENT, and REDIRECT (with thread context)
-        human_emails, agent_emails, redirect_emails = await classifier.classify_emails(emails, email_threads_dict, email_reader)
-        
-        counts = {"processed": 0, "skipped": 0, "human": 0, "redirect": 0, "ai_agent": 0}
-        
-        def is_duplicate(email_id: str) -> bool:
-            """Check if email already exists in pending queue or history"""
-            existing_pending = db.query(ApprovalQueue).filter_by(email_id=email_id, rejected=False, approved=False).first()
-            existing_processed = db.query(EmailHistory).filter_by(email_id=email_id).first()
-            return existing_pending is not None or existing_processed is not None
-        
-        # Process REDIRECT emails
-        for classification in redirect_emails:
-            email = classification.email
-            if is_duplicate(email.id):
-                counts["skipped"] += 1
-                continue
-            
-            db.add(ApprovalQueue(
-                email_id=email.id,
-                conversation_id=email.conversation_id,
-                conversation_index=email.conversation_index,
-                subject=email.subject,
-                sender_email=email.sender_email,
-                body=email.body,
-                route='REDIRECT',
-                redirect_department=classification.redirect_department,
-                confidence=classification.confidence,
-                agent_used=False,
-                approved=False,
-                created_at=datetime.now()
-            ))
-            counts["redirect"] += 1
-        
-        # Process HUMAN_REQUIRED emails
-        for classification in human_emails:
-            email = classification.email
-            if is_duplicate(email.id):
-                counts["skipped"] += 1
-                continue
-            
-            db.add(ApprovalQueue(
-                email_id=email.id,
-                conversation_id=email.conversation_id,
-                conversation_index=email.conversation_index,
-                subject=email.subject,
-                sender_email=email.sender_email,
-                body=email.body,
-                route='HUMAN_REQUIRED',
-                confidence=classification.confidence,
-                agent_used=False,
-                approved=False,
-                created_at=datetime.now()
-            ))
-            counts["human"] += 1
-        
-        # Process AI_AGENT emails - generate responses and store
-        for classification in agent_emails:
-            email = classification.email
-            if is_duplicate(email.id):
-                counts["skipped"] += 1
-                continue
-            
-            # Fetch full thread context for the AI agent
-            thread_context = ""
-            thread_messages = email_threads_dict.get(email.id, [])
-            if thread_messages:
-                print(f"Thread messages: length {len(thread_messages)}")
-                thread_context = email_reader.format_thread_context(thread_messages, email.id)
-            
-            # Generate AI response with thread context
-            response = await agent.query_agent(email.subject, email.body, thread_context)
-            
-            if response and response.get('response'):
-                db.add(ApprovalQueue(
-                    email_id=email.id,
-                    conversation_id=email.conversation_id,
-                    conversation_index=email.conversation_index,
-                    subject=email.subject,
-                    sender_email=email.sender_email,
-                    body=email.body,
-                    route='AI_AGENT',
-                    generated_response=response['response'],
-                    confidence=classification.confidence,
-                    agent_used=True,
-                    approved=False,
-                    created_at=datetime.now()
-                ))
-                counts["ai_agent"] += 1
-        
-        # Commit all records at once
-        counts["processed"] = counts["redirect"] + counts["human"] + counts["ai_agent"]
-        if counts["processed"] > 0:
-            db.commit()
-        
-        return {
-            "status": "success",
-            "message": f"Processed {counts['processed']} emails ({counts['ai_agent']} AI, {counts['human']} human, {counts['redirect']} redirect), skipped {counts['skipped']}",
-            "processed": counts["processed"],
-            "ai_agent": counts["ai_agent"],
-            "human_required": counts["human"],
-            "redirect": counts["redirect"],
-            "skipped": counts["skipped"]
-        }
 
     except httpx.HTTPStatusError as e:
         print(f"Error fetching user emails: {e}")
