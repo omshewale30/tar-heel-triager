@@ -1,23 +1,12 @@
-#This file abstracts the email preprocessing like fetching, sending to the azure client and returns the result of fetch-traige
+#This file abstracts the email preprocessing like fetching, sending to the azure client and returns the result of fetch-triage
 
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
-import os
-from dotenv import load_dotenv
-import httpx
-from contextlib import asynccontextmanager
-import logging
-from models import ApprovalQueue, EmailHistory, db
-from email_reader import Email
+from typing import Optional, AsyncGenerator, Dict, Any
 import asyncio
+import json
 
-# Import our modules
-from email_reader import EmailReader
 from models import ApprovalQueue, EmailHistory, db
-load_dotenv()
+from email_reader import Email, EmailReader
 
 class EmailEngine:
 
@@ -50,9 +39,8 @@ class EmailEngine:
     
 
     async def process_emails(self):
-
+        """Non-streaming version for regular endpoint"""
         results = await asyncio.gather(*[self.fetch_thread(email) for email in self.emails])
-
         self.email_threads_dict = dict(results)
 
         human_emails, agent_emails, redirect_emails = await self.classifier.classify_emails(self.emails, self.email_threads_dict, self.email_reader)
@@ -65,6 +53,59 @@ class EmailEngine:
         if self.counts["processed"] > 0:
             db.commit()
 
+        return self._get_result()
+
+    async def process_emails_stream(self) -> AsyncGenerator[str, None]:
+        """Streaming version that yields SSE progress events"""
+        try:
+            # Step 1: Fetch threads
+            yield self._sse_event({'progress': 15, 'step': 'Fetching conversation threads...'})
+            results = await asyncio.gather(*[self.fetch_thread(email) for email in self.emails])
+            self.email_threads_dict = dict(results)
+
+            # Step 2: Classify
+            yield self._sse_event({'progress': 30, 'step': 'Classifying emails...'})
+            human_emails, agent_emails, redirect_emails = await self.classifier.classify_emails(
+                self.emails, self.email_threads_dict, self.email_reader
+            )
+            
+            yield self._sse_event({
+                'progress': 50, 
+                'step': f'Classified: {len(agent_emails)} AI, {len(human_emails)} human, {len(redirect_emails)} redirect'
+            })
+
+            # Step 3: Process redirect emails
+            yield self._sse_event({'progress': 55, 'step': 'Processing redirect emails...'})
+            self.process_redirect_emails(redirect_emails)
+
+            # Step 4: Process human emails
+            yield self._sse_event({'progress': 65, 'step': 'Processing human-required emails...'})
+            self.process_human_emails(human_emails)
+
+            # Step 5: Process AI agent emails with per-email progress
+            total_agent = len(agent_emails)
+            for i, classification in enumerate(agent_emails):
+                progress = 70 + int((i / max(total_agent, 1)) * 25)
+                yield self._sse_event({'progress': progress, 'step': f'Generating AI response {i+1}/{total_agent}...'})
+                await self._process_single_agent_email(classification)
+
+            # Commit and complete
+            self.counts["processed"] = self.counts["redirect"] + self.counts["human"] + self.counts["ai_agent"]
+            if self.counts["processed"] > 0:
+                db.commit()
+
+            yield self._sse_event({'status': 'done', 'progress': 100, 'step': 'Complete!', 'results': self.counts})
+
+        except Exception as e:
+            db.rollback()
+            yield self._sse_event({'status': 'error', 'message': str(e)})
+
+    def _sse_event(self, data: Dict[str, Any]) -> str:
+        """Format data as SSE event"""
+        return f"data: {json.dumps(data)}\n\n"
+
+    def _get_result(self) -> Dict[str, Any]:
+        """Return final result dict"""
         return {
             "status": "success",
             "message": f"Processed {self.counts['processed']} emails ({self.counts['ai_agent']} AI, {self.counts['human']} human, {self.counts['redirect']} redirect), skipped {self.counts['skipped']}",
@@ -148,37 +189,41 @@ class EmailEngine:
             None  
         '''
         for classification in agent_emails:
-            email = classification.email
-            if self.is_duplicate(email.id):
-                self.counts["skipped"] += 1
-                continue
-            
-            # Fetch full thread context for the AI agent
-            thread_context = ""
-            thread_messages = self.email_threads_dict.get(email.id, [])
-            if thread_messages:
-                print(f"Thread messages: length {len(thread_messages)}")
-                thread_context = self.email_reader.format_thread_context(thread_messages, email.id)
-            
-            # Generate AI response with thread context
-            response = await self.agent.query_agent(email.subject, email.body, thread_context)
-            
-            if response and response.get('response'):
-                db.add(ApprovalQueue(
-                    email_id=email.id,
-                    conversation_id=email.conversation_id,
-                    conversation_index=email.conversation_index,
-                    subject=email.subject,
-                    sender_email=email.sender_email,
-                    body=email.body,
-                    route='AI_AGENT',
-                    generated_response=response['response'],
-                    confidence=classification.confidence,
-                    agent_used=True,
-                    approved=False,
-                    created_at=datetime.now()
-                ))
-                self.counts["ai_agent"] += 1
+            await self._process_single_agent_email(classification)
+
+    async def _process_single_agent_email(self, classification):
+        '''Process a single agent email classification'''
+        email = classification.email
+        if self.is_duplicate(email.id):
+            self.counts["skipped"] += 1
+            return
+        
+        # Fetch full thread context for the AI agent
+        thread_context = ""
+        thread_messages = self.email_threads_dict.get(email.id, [])
+        if thread_messages:
+            print(f"Thread messages: length {len(thread_messages)}")
+            thread_context = self.email_reader.format_thread_context(thread_messages, email.id)
+        
+        # Generate AI response with thread context
+        response = await self.agent.query_agent(email.subject, email.body, thread_context)
+        
+        if response and response.get('response'):
+            db.add(ApprovalQueue(
+                email_id=email.id,
+                conversation_id=email.conversation_id,
+                conversation_index=email.conversation_index,
+                subject=email.subject,
+                sender_email=email.sender_email,
+                body=email.body,
+                route='AI_AGENT',
+                generated_response=response['response'],
+                confidence=classification.confidence,
+                agent_used=True,
+                approved=False,
+                created_at=datetime.now()
+            ))
+            self.counts["ai_agent"] += 1
 
 
 

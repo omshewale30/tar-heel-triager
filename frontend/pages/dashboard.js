@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ApprovalPanel from '../components/ApprovalPanel';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
-import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue, rejectResponse, deleteApproval } from '../api';
+import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue, rejectResponse, deleteApproval, fetchTriageEmailsStream } from '../api';
 import { useMsal } from '@azure/msal-react';
 import Head from 'next/head';
 import { useTheme } from '../lib/ThemeContext';
@@ -49,6 +49,59 @@ function Spinner({ className = "h-5 w-5" }) {
   );
 }
 
+// Progress Toast component for SSE streaming
+function ProgressToast({ progress, step, status, onClose, isDark }) {
+  const isComplete = status === 'done' || status === 'empty';
+  const isError = status === 'error';
+  
+  useEffect(() => {
+    if (isComplete) {
+      const timer = setTimeout(onClose, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isComplete, onClose]);
+
+  return (
+    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 min-w-80 max-w-md animate-fade-in rounded-xl p-4 shadow-2xl ring-1 backdrop-blur-xl transition-all ${
+      isError 
+        ? 'bg-gradient-to-r from-red-500/20 to-red-500/10 ring-red-500/30'
+        : isComplete
+          ? 'bg-gradient-to-r from-emerald-500/20 to-emerald-500/10 ring-emerald-500/30'
+          : isDark 
+            ? 'bg-gradient-to-r from-[#0B1F3A]/90 to-[#050B16]/90 ring-[#7BAFD4]/30'
+            : 'bg-white/95 ring-slate-200'
+    }`}>
+      <div className="flex items-center justify-between mb-2">
+        <p className={`text-sm font-medium ${
+          isError ? 'text-red-400' : isComplete ? 'text-emerald-400' : isDark ? 'text-slate-200' : 'text-slate-700'
+        }`}>
+          {status === 'empty' ? '🎉 You are all caught up!' : step || 'Processing...'}
+        </p>
+        {(isComplete || isError) && (
+          <button 
+            onClick={onClose} 
+            className={`ml-3 transition-colors ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+      {!isError && (
+        <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-slate-200'}`}>
+          <div 
+            className={`h-full transition-all duration-300 ease-out rounded-full ${
+              isComplete ? 'bg-emerald-500' : 'bg-[#7BAFD4]'
+            }`}
+            style={{ width: `${progress || 0}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Badge component with theme support
 function Badge({ children, variant = 'default', isDark = true }) {
   const darkVariants = {
@@ -83,6 +136,7 @@ function DashboardContent() {
   const [fetchingTriage, setFetchingTriage] = useState(false);
   const [toast, setToast] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [triageProgress, setTriageProgress] = useState(null); // { progress, step, status }
   const { instance, accounts } = useMsal();
   const { isDark } = useTheme();
 
@@ -196,18 +250,24 @@ function DashboardContent() {
 
   const handleFetchTriage = async () => {
     setFetchingTriage(true);
+    setTriageProgress({ progress: 0, step: 'Starting...', status: 'loading' });
+    
     try {
-      const response = await fetchTriageEmails(instance, accounts);
-      if (response.ok) {
-        showToast('Triage emails fetched successfully', 'success');
-        loadApprovalQueue();
-      } else {
-        const error = await response.json();
-        showToast(`Triage failed: ${error.detail || 'Unknown error'}`, 'error');
-      }
+      await fetchTriageEmailsStream(instance, accounts, (data) => {
+        setTriageProgress({
+          progress: data.progress || 0,
+          step: data.step || data.message || '',
+          status: data.status || 'loading'
+        });
+        
+        // Refresh queue when done
+        if (data.status === 'done') {
+          loadApprovalQueue();
+        }
+      });
     } catch (error) {
       console.error('Error fetching triage emails:', error);
-      showToast(`Error: ${error.message}`, 'error');
+      setTriageProgress({ progress: 0, step: error.message, status: 'error' });
     } finally {
       setFetchingTriage(false);
     }
@@ -224,6 +284,16 @@ function DashboardContent() {
           message={toast.message} 
           type={toast.type} 
           onClose={() => setToast(null)}
+          isDark={isDark}
+        />
+      )}
+
+      {triageProgress && (
+        <ProgressToast
+          progress={triageProgress.progress}
+          step={triageProgress.step}
+          status={triageProgress.status}
+          onClose={() => setTriageProgress(null)}
           isDark={isDark}
         />
       )}

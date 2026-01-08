@@ -169,3 +169,56 @@ export const deleteApproval = async (approvalId) => {
     });
     return response;
 };
+
+/**
+ * SSE streaming endpoint for triage with real-time progress
+ * @param {object} instance - MSAL instance
+ * @param {array} accounts - MSAL accounts
+ * @param {function} onProgress - Callback for progress updates: (data) => void
+ * @returns {Promise} Resolves when stream completes
+ */
+export const fetchTriageEmailsStream = async (instance, accounts, onProgress) => {
+    const graphScopes = ['https://graph.microsoft.com/Mail.Read'];
+    if (!accounts.length) {
+        throw new Error('No accounts found');
+    }
+
+    const tokenResponse = await instance.acquireTokenSilent({
+        scopes: graphScopes,
+        account: accounts[0]
+    });
+    
+    const accessToken = tokenResponse.accessToken;
+    
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/fetch-triage-stream`, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'text/event-stream'
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value);
+        const lines = text.split('\n').filter(line => line.startsWith('data: '));
+
+        for (const line of lines) {
+            try {
+                const data = JSON.parse(line.replace('data: ', ''));
+                onProgress(data);
+            } catch (e) {
+                console.error('Failed to parse SSE data:', e);
+            }
+        }
+    }
+};

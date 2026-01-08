@@ -4,14 +4,17 @@ Main triage endpoint and API routes
 """
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import os
+import json
 from dotenv import load_dotenv
 import httpx
 from contextlib import asynccontextmanager
 import logging
+import asyncio
 
 # Import our modules
 from email_reader import EmailReader
@@ -305,6 +308,46 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
         db.rollback()  # Rollback on any error
         print(f"Error in fetch-triage-emails: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/fetch-triage-stream")
+async def fetch_triage_stream(request: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    SSE endpoint for real-time triage progress updates.
+    Uses EmailEngine's streaming method.
+    """
+    access_token = request.credentials
+    if not access_token:
+        raise HTTPException(status_code=401, detail="access_token is required")
+
+    async def event_generator():
+        try:
+            yield f"data: {json.dumps({'status': 'fetching', 'progress': 5, 'step': 'Fetching unread emails...'})}\n\n"
+            
+            email_reader = EmailReader(access_token=access_token)
+            emails = await email_reader.get_unread_emails()
+            
+            if not emails:
+                yield f"data: {json.dumps({'status': 'empty', 'message': 'You are all caught up! 🎉', 'progress': 100})}\n\n"
+                return
+            
+            total = len(emails)
+            yield f"data: {json.dumps({'status': 'found', 'count': total, 'progress': 10, 'step': f'Found {total} unread email(s)'})}\n\n"
+            
+            # Use EmailEngine's streaming method
+            email_engine = EmailEngine(emails=emails, email_reader=email_reader, agent=agent, classifier=classifier)
+            async for event in email_engine.process_emails_stream():
+                yield event
+                
+        except Exception as e:
+            db.rollback()
+            yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+    )
 
 
 @app.post("/fetch-user-emails")
