@@ -6,12 +6,13 @@ import asyncio
 import json
 
 from models import ApprovalQueue, EmailHistory, db
-from email_reader import Email, EmailReader
+from email_client import EmailClient
+from models import Email
 
 class EmailEngine:
 
-    def __init__(self,emails, email_reader,agent,classifier) -> None:
-        self.email_reader= email_reader
+    def __init__(self,emails, email_client,agent,classifier) -> None:
+        self.email_client= email_client
         self.agent = agent
         self.emails = emails
         self.email_threads_dict = {}
@@ -31,7 +32,7 @@ class EmailEngine:
         if not email.conversation_id:
             return email.id, []
         try:
-            msgs = await self.email_reader.get_conversation_messages(email.conversation_id)
+            msgs = await self.email_client.get_conversation_messages(email.conversation_id)
             return email.id, msgs
         except Exception as e:
             print(f"⚠️ Thread fetch failed for {email.id}: {e}")
@@ -43,7 +44,7 @@ class EmailEngine:
         results = await asyncio.gather(*[self.fetch_thread(email) for email in self.emails])
         self.email_threads_dict = dict(results)
 
-        human_emails, agent_emails, redirect_emails = await self.classifier.classify_emails(self.emails, self.email_threads_dict, self.email_reader)
+        human_emails, agent_emails, redirect_emails = await self.classifier.classify_emails(self.emails, self.email_threads_dict, self.email_client)
 
         self.process_redirect_emails(redirect_emails)
         self.process_human_emails(human_emails)
@@ -66,7 +67,7 @@ class EmailEngine:
             # Step 2: Classify
             yield self._sse_event({'progress': 30, 'step': 'Classifying emails...'})
             human_emails, agent_emails, redirect_emails = await self.classifier.classify_emails(
-                self.emails, self.email_threads_dict, self.email_reader
+                self.emails, self.email_threads_dict, self.email_client
             )
             
             yield self._sse_event({
@@ -203,7 +204,7 @@ class EmailEngine:
         thread_messages = self.email_threads_dict.get(email.id, [])
         if thread_messages:
             print(f"Thread messages: length {len(thread_messages)}")
-            thread_context = self.email_reader.format_thread_context(thread_messages, email.id)
+            thread_context = self.email_client.format_thread_context(thread_messages, email.id)
         
         # Generate AI response with thread context
         response = await self.agent.query_agent(email.subject, email.body, thread_context)

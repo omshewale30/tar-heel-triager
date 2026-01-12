@@ -17,9 +17,8 @@ import logging
 import asyncio
 
 # Import our modules
-from email_reader import EmailReader
+from email_client import EmailClient
 from classifier import EmailClassifier
-from priority_scorer import PriorityScorer
 from agent_handler import AzureAIFoundryAgent
 from fastapi.middleware.cors import CORSMiddleware
 from models import ApprovalQueue, EmailHistory, db
@@ -55,7 +54,6 @@ logging.basicConfig(level=logging.WARNING)
 
 
 
-priority_scorer = PriorityScorer()
 azure_ai_client = AzureAIClient()
 classifier = EmailClassifier(llm=azure_ai_client.get_llm())
 agent = AzureAIFoundryAgent(project_client=azure_ai_client.project_client)
@@ -205,10 +203,10 @@ async def approve_response(request: ApproveResponse, access_token: HTTPAuthoriza
             raise HTTPException(status_code=400, detail="No response to send")
         
         # Send via Microsoft Graph
-        email_reader = EmailReader(access_token=access_token.credentials)
+        email_client = EmailClient(access_token=access_token.credentials)
         print(f"Sending email to {approval.sender_email} with subject {approval.subject} and body {final_response}")
         # Send reply using approval record data
-        send_result = await email_reader.send_reply(
+        send_result = await email_client.send_reply(
             original_email_id=approval.email_id,
             body=final_response
         )
@@ -218,7 +216,7 @@ async def approve_response(request: ApproveResponse, access_token: HTTPAuthoriza
         #mark the email as read
 
         print(f"Marking email as read {approval.email_id}")
-        mark_read_result = await email_reader.mark_as_read(approval.email_id)
+        mark_read_result = await email_client.mark_as_read(approval.email_id)
         if not mark_read_result:
             raise HTTPException(status_code=500, detail="Failed to mark email as read")
 
@@ -294,9 +292,9 @@ async def fetch_triage_emails(request: HTTPAuthorizationCredentials = Depends(se
         raise HTTPException(status_code=401, detail="access_token is required")
     
     try:
-        email_reader = EmailReader(access_token=access_token)
-        emails = await email_reader.get_unread_emails()
-        email_engine = EmailEngine(emails=emails, email_reader=email_reader, agent=agent, classifier=classifier)
+        email_client = EmailClient(access_token=access_token)
+        emails = await email_client.get_unread_emails()
+        email_engine = EmailEngine(emails=emails, email_client=email_client, agent=agent, classifier=classifier)
         result = await email_engine.process_emails()
         return result
 
@@ -324,8 +322,8 @@ async def fetch_triage_stream(request: HTTPAuthorizationCredentials = Depends(se
         try:
             yield f"data: {json.dumps({'status': 'fetching', 'progress': 5, 'step': 'Fetching unread emails...'})}\n\n"
             
-            email_reader = EmailReader(access_token=access_token)
-            emails = await email_reader.get_unread_emails()
+            email_client = EmailClient(access_token=access_token)
+            emails = await email_client.get_unread_emails()
             
             if not emails:
                 yield f"data: {json.dumps({'status': 'empty', 'message': 'You are all caught up! 🎉', 'progress': 100})}\n\n"
@@ -335,7 +333,7 @@ async def fetch_triage_stream(request: HTTPAuthorizationCredentials = Depends(se
             yield f"data: {json.dumps({'status': 'found', 'count': total, 'progress': 10, 'step': f'Found {total} unread email(s)'})}\n\n"
             
             # Use EmailEngine's streaming method
-            email_engine = EmailEngine(emails=emails, email_reader=email_reader, agent=agent, classifier=classifier)
+            email_engine = EmailEngine(emails=emails, email_client=email_client, agent=agent, classifier=classifier)
             async for event in email_engine.process_emails_stream():
                 yield event
                 
@@ -365,10 +363,10 @@ async def fetch_user_emails(request: HTTPAuthorizationCredentials = Depends(secu
         if not access_token:
             raise HTTPException(status_code=401, detail="Invalid or expired access_token")
         
-        email_reader = EmailReader(access_token=access_token)
-        if not email_reader:
+        email_client = EmailClient(access_token=access_token)
+        if not email_client:
             raise HTTPException(status_code=400, detail="access_token is required")
-        emails = await email_reader.get_unread_emails()
+        emails = await email_client.get_unread_emails()
 
     
         return {

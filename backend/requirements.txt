@@ -9,8 +9,8 @@ azure-ai-projects==1.0.0
 msgraph-sdk==1.0.0  # Microsoft Graph SDK
 
 # Database
-sqlalchemy==2.0.23
-psycopg2-binary==3.3.2  # PostgreSQL driver for Azure
+sqlalchemy>=2.0.24
+psycopg2-binary  # PostgreSQL driver for Azure
 
 # OpenAI
 openai==1.3.5

@@ -10,10 +10,27 @@ from datetime import datetime
 import os
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from dotenv import load_dotenv
-
+from typing import Optional
+from dataclasses import dataclass
 load_dotenv()
 
 Base = declarative_base()
+
+
+@dataclass
+class Email:
+    id: str
+    conversation_id: Optional[str]
+    conversation_index: Optional[str]
+    subject: str
+    body: str
+    sender: str
+    sender_email: str
+    received_at: str  # Kept as string for simplicity with JSON
+    is_read: bool
+
+
+
 
 
 

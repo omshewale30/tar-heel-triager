@@ -13,24 +13,9 @@ from azure.identity import ClientSecretCredential
 import asyncio
 import httpx
 import re
+from models import Email
 
-
-
-
-
-@dataclass
-class Email:
-    id: str
-    conversation_id: Optional[str]
-    conversation_index: Optional[str]
-    subject: str
-    body: str
-    sender: str
-    sender_email: str
-    received_at: str  # Kept as string for simplicity with JSON
-    is_read: bool
-
-class EmailReader:
+class EmailClient:
     """
     Refactored to use the User's Access Token directly.
     """
@@ -47,7 +32,7 @@ class EmailReader:
             "Prefer": 'outlook.body-content-type="text"'
         }
 
-    async def get_unread_emails(self, max_results: int = 10) -> List[Email]:
+    async def get_unread_emails(self, max_results: int = 10) -> list[Email]:
         async with httpx.AsyncClient() as client:
             params = {
                 '$filter': 'isRead eq false',
@@ -101,7 +86,7 @@ class EmailReader:
             return response.status_code == 200
     
     async def send_reply(self, original_email_id: str, body: str, 
-                         importance: str = "normal") -> Dict[str, Any]:
+                         importance: str = "normal") -> dict[str, Any]:
         """
         Send TRUE REPLY to an existing email - maintains thread connection
         
@@ -165,7 +150,7 @@ class EmailReader:
         formatted = "<br>".join(html_lines)
         return f"<div style='font-family: Calibri, Arial, sans-serif; font-size: 11pt;'>{formatted}</div>"
     
-    async def get_conversation_messages(self, conversation_id: str) -> List[Dict[str, Any]]:
+    async def get_conversation_messages(self, conversation_id: str) -> list[dict[str, Any]]:
         """
         Fetch all messages in a conversation thread, ordered oldest to newest.
         
@@ -202,7 +187,7 @@ class EmailReader:
             print(f"Failed to fetch conversation messages: {response.status_code} - {response.text[:200]}")
             return []
     
-    def format_thread_classification_context(self, messages: List[Dict[str, Any]], current_email_id: str) -> str:
+    def format_thread_classification_context(self, messages: list[dict[str, Any]], current_email_id: str) -> str:
         """
         Format thread messages into a context string for the LLM to classify the thread into 'AI_AGENT' or 'HUMAN_REQUIRED' or 'REDIRECT'.
         All messages in the thread are included regardless of count.
@@ -237,7 +222,7 @@ class EmailReader:
         return "\n".join(context_parts)
         
     
-    def format_thread_context(self, messages: List[Dict[str, Any]], current_email_id: str) -> str:
+    def format_thread_context(self, messages: list[dict[str, Any]], current_email_id: str) -> str:
         """
         Format thread messages into a context string for the AI agent.
         All messages in the thread are included regardless of count.
@@ -283,7 +268,7 @@ class EmailReader:
         context_parts.append("=== END OF THREAD ===\n")
         return "\n".join(context_parts)
 
-    async def _get_single_message(self, message_id: str) -> Dict[str, Any]:
+    async def _get_single_message(self, message_id: str) -> dict[str, Any]:
         """Helper: Fetch single message by ID"""
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -297,7 +282,7 @@ class EmailReader:
 
 
 if __name__ == "__main__":
-    reader = EmailReader()
+    reader = EmailClient()
     emails = asyncio.run(reader.get_unread_emails())
     print(emails)
 

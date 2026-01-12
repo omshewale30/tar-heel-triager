@@ -8,7 +8,7 @@ from typing import Dict, Optional, Any
 from openai import AzureOpenAI
 from dotenv import load_dotenv
 from azure.azure_ai_client import AzureAIClient
-from email_reader import Email
+from models import Email
 from pydantic import BaseModel
 from prompts import triage_prompt
 
