@@ -14,6 +14,7 @@ import asyncio
 import httpx
 import re
 from models import Email
+from fastapi import HTTPException
 
 class EmailClient:
     """
@@ -84,7 +85,44 @@ class EmailClient:
                 json=payload
             )
             return response.status_code == 200
-    
+    async def forward_email(self, email_id: str, department_name: str, department_email: str, comment: str = "") -> dict[str, Any]:
+        """
+        Forward an email to another department.
+        
+        Args:
+            email_id: The ID of the email to forward
+            department_name: Name of the department (displayed in To field)
+            department_email: Email address to forward to
+            comment: Optional comment to include with the forward
+        """
+        request_body = {
+            "comment": comment,
+            "toRecipients": [
+                {
+                    "emailAddress": {
+                        "name": department_name,
+                        "address": department_email,
+                    },
+                },
+            ],
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.base_url}/me/messages/{email_id}/forward",
+                headers=self.headers,
+                json=request_body,
+            )
+        if response.status_code not in [200, 202]:
+            return {
+                "success": False,
+                "status_code": response.status_code,
+                "message": response.text,
+            }
+        return {
+            "success": True,
+            "status_code": response.status_code,
+            "message": response.text if not response.is_success else "Forward sent successfully",
+        }
     async def send_reply(self, original_email_id: str, body: str, 
                          importance: str = "normal") -> dict[str, Any]:
         """

@@ -12,9 +12,18 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from dotenv import load_dotenv
 from typing import Optional
 from dataclasses import dataclass
+from pydantic import BaseModel
 load_dotenv()
 
 Base = declarative_base()
+
+# Add endpoint to forward email
+
+class ForwardEmailRequest(BaseModel):
+    approval_id: str
+    department: str
+    comment: Optional[str] = ""
+
 
 
 @dataclass
