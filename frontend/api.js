@@ -170,6 +170,36 @@ export const deleteApproval = async (approvalId) => {
     return response;
 };
 
+export const redirectEmail = async (instance, accounts, approvalId, redirectDepartmentEmail, comment) => {
+    const graphScopes = ['https://graph.microsoft.com/Mail.Read', 'https://graph.microsoft.com/Mail.Send'];
+    if (!accounts.length) {
+        throw new Error('No accounts found');
+    }
+
+    const tokenResponse = await instance.acquireTokenSilent({
+        scopes: graphScopes,
+        account: accounts[0]
+    });
+
+    const accessToken = tokenResponse.accessToken;
+    
+    
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/redirect-email`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+            approval_id: approvalId,
+            redirect_department_email: redirectDepartmentEmail,
+            comment: comment
+        }),
+    });
+    return response;
+};
+
+
 /**
  * SSE streaming endpoint for triage with real-time progress
  * @param {object} instance - MSAL instance

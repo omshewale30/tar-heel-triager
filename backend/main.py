@@ -24,6 +24,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from models import ApprovalQueue, EmailHistory, db
 from azure.azure_ai_client import AzureAIClient
 from email_engine import EmailEngine
+from models import EmailTriageRequest, TriageResponse, ApproveResponse, RejectResponse, RedirectEmailRequest
+from redirect_handler import RedirectHandler
 load_dotenv()
 
 
@@ -52,45 +54,16 @@ security = HTTPBearer()
 
 logging.basicConfig(level=logging.WARNING)
 
-
-
 azure_ai_client = AzureAIClient()
 classifier = EmailClassifier(llm=azure_ai_client.get_llm())
 agent = AzureAIFoundryAgent(project_client=azure_ai_client.project_client)
-
-class EmailTriageRequest(BaseModel):
-    email_id: str
-    subject: str
-    body: str
-    sender: str
-    sender_email: str
-    received_at: str
-
-
-class TriageResponse(BaseModel):
-    email_id: str
-    category: str
-    priority: int
-    suggested_response: Optional[str]
-    confidence: float
-    requires_approval: bool
-    route: str  # 'auto_faq' | 'manual' | 'urgent'
-
-
-class ApproveResponse(BaseModel):
-    approval_id: str
-    staff_edits: Optional[str] = ""
-
-
-class RejectResponse(BaseModel):
-    approval_id: str
 
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {
-        "service": "UNC Cashier Email Triage API",
+        "service": "Heelper API",
         "status": "running",
         "version": "1.0.0"
     }
@@ -251,6 +224,22 @@ async def approve_response(request: ApproveResponse, access_token: HTTPAuthoriza
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/redirect-email")
+async def redirect_email(request: RedirectEmailRequest, access_token: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Redirects an email to the appropriate department
+    """
+    print(f"Redirecting email {request.approval_id} to {request.redirect_department_email} with comment {request.comment}")
+    try:
+        redirect_handler = RedirectHandler(email_client=EmailClient(access_token=access_token.credentials))
+        result = await redirect_handler.redirect_email(request)
+        return result
+    except HTTPException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+    except Exception as e:
+        print(f"Error in redirect_email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/approval-queue")
 async def get_approval_queue(route: str = "AI_AGENT"):

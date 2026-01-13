@@ -1,18 +1,64 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../lib/ThemeContext';
+import { redirect_department_dict } from '../lib/constants';
 
-export default function ApprovalPanel({ email, route, onApprove, onReject }) {
+export default function ApprovalPanel({ email, route, onApprove, onReject, onRedirect }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedResponse, setEditedResponse] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [customEmail, setCustomEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [redirectComment, setRedirectComment] = useState('');
   const { isDark } = useTheme();
+
+  // Email validation regex
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@unc\.edu$/;
+    return emailRegex.test(email);
+  };
 
   // Update editedResponse when email changes
   useEffect(() => {
     setEditedResponse(email.generated_response || '');
+    // Set initial department selection based on stored redirect_department
+    if (email.redirect_department && redirect_department_dict[email.redirect_department]) {
+      setSelectedDepartment(email.redirect_department);
+    } else {
+      setSelectedDepartment('');
+    }
+    setCustomEmail('');
+    setEmailError('');
     setIsEditing(false);
     setFeedback('');
+    setRedirectComment('');
   }, [email]);
+
+  // Handle custom email change with validation
+  const handleCustomEmailChange = (value) => {
+    setCustomEmail(value);
+    if (value && !validateEmail(value)) {
+      setEmailError('Please enter a valid email address');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  // Get the final redirect email address
+  const getRedirectEmail = () => {
+    if (selectedDepartment === 'Other') {
+      return customEmail;
+    }
+    return redirect_department_dict[selectedDepartment] || '';
+  };
+
+  // Check if redirect is valid
+  const isRedirectValid = () => {
+    if (selectedDepartment === 'Other') {
+      return customEmail && validateEmail(customEmail);
+    }
+    return selectedDepartment && redirect_department_dict[selectedDepartment];
+  };
 
   const handleApprove = () => {
     onApprove(editedResponse);
@@ -20,7 +66,12 @@ export default function ApprovalPanel({ email, route, onApprove, onReject }) {
   const handleReject = () => {
     onReject();
   };
-
+  const handleRedirect = () => {
+    const redirectEmail = getRedirectEmail();
+    if (redirectEmail) {
+      onRedirect(redirectEmail, redirectComment);
+    }
+  };
   return (
     <div className={`rounded-2xl p-6 ring-1 backdrop-blur-xl animate-fade-in transition-colors duration-300 ${
       isDark 
@@ -53,7 +104,103 @@ export default function ApprovalPanel({ email, route, onApprove, onReject }) {
         </div>
       )}
 
+      {route === 'REDIRECT' && (
+              <div className="mb-6 p-4 bg-blue-500/10 ring-1 ring-blue-500/20 rounded-xl">
+                <p className="text-sm font-bold text-blue-400 mb-1.5 flex items-center gap-2">
+                  <span aria-hidden="true">↗️</span>
+                  Redirect to Department
+                </p>
+                <p className={`text-xs leading-relaxed ${isDark ? 'text-blue-300/80' : 'text-blue-700'}`}>
+                  This email should be forwarded to another department. Select the appropriate department below.
+                </p>
+              </div>
+        )}
+        {/* Redirect Department Selector */}
+        {route === 'REDIRECT' && (
+          <div className="mb-6">
+            <label className={`block text-xs font-semibold mb-3 uppercase tracking-wider flex items-center gap-2 ${
+              isDark ? 'text-slate-500' : 'text-slate-500'
+            }`}>
+              <span aria-hidden="true">📧</span>
+              Redirect Department
+            </label>
+            <select
+              value={selectedDepartment}
+              onChange={(e) => {
+                setSelectedDepartment(e.target.value);
+                if (e.target.value !== 'Other') {
+                  setCustomEmail('');
+                  setEmailError('');
+                }
+              }}
+              className={`w-full p-4 text-sm rounded-xl ring-1 transition-all focus:ring-2 focus:ring-[#7BAFD4] focus:outline-none ${
+                isDark 
+                  ? 'bg-[#050B16]/60 text-slate-200 ring-white/10 placeholder:text-slate-500' 
+                  : 'bg-slate-50 text-slate-900 ring-slate-200 placeholder:text-slate-400'
+              }`}
+            >
+              <option value="">Select a department</option>
+              {Object.keys(redirect_department_dict).map((department) => (
+                <option key={department} value={department}>
+                  {department}
+                </option>
+              ))}
+              <option value="Other">Other (enter email)</option>
+            </select>
+
+            {/* Custom Email Input - shown when "Other" is selected */}
+            {selectedDepartment === 'Other' && (
+              <div className="mt-4">
+                <label className={`block text-xs font-semibold mb-2 uppercase tracking-wider ${
+                  isDark ? 'text-slate-500' : 'text-slate-500'
+                }`}>
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={customEmail}
+                  onChange={(e) => handleCustomEmailChange(e.target.value)}
+                  placeholder="Enter email address..."
+                  className={`w-full p-4 text-sm rounded-xl ring-1 transition-all focus:ring-2 focus:outline-none ${
+                    emailError
+                      ? 'ring-red-500/50 focus:ring-red-500'
+                      : 'focus:ring-[#7BAFD4]'
+                  } ${
+                    isDark 
+                      ? 'bg-[#050B16]/60 text-slate-200 ring-white/10 placeholder:text-slate-500' 
+                      : 'bg-slate-50 text-slate-900 ring-slate-200 placeholder:text-slate-400'
+                  }`}
+                />
+                {emailError && (
+                  <p className="mt-2 text-xs text-red-400 flex items-center gap-1">
+                    <span aria-hidden="true">⚠️</span>
+                    {emailError}
+                  </p>
+                )}
+              </div>
+            )}
+
+          {/* Optional comment for forward */}
+          <label className={`block text-xs font-semibold mt-4 mb-3 uppercase tracking-wider ${
+            isDark ? 'text-slate-500' : 'text-slate-500'
+          }`}>
+            Comment (Optional)
+          </label>
+          <textarea
+            value={redirectComment}
+            onChange={(e) => setRedirectComment(e.target.value)}
+            placeholder="Add a note to include with the forwarded email..."
+            className={`w-full h-24 p-4 text-sm rounded-xl ring-1 transition-all focus:ring-2 focus:ring-[#7BAFD4] focus:outline-none resize-none ${
+              isDark 
+                ? 'bg-[#050B16]/60 text-slate-200 ring-white/10 placeholder:text-slate-500' 
+                : 'bg-slate-50 text-slate-900 ring-slate-200 placeholder:text-slate-400'
+            }`}
+          />
+          </div>
+        )}
+
       {/* Suggested Response */}
+      {route !== 'REDIRECT' && (
       <div className="mb-6">
         <label className={`block text-xs font-semibold mb-3 uppercase tracking-wider flex items-center gap-2 ${
           isDark ? 'text-slate-500' : 'text-slate-500'
@@ -107,8 +254,9 @@ export default function ApprovalPanel({ email, route, onApprove, onReject }) {
               </>
             )}
           </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Feedback */}
       <div className="mb-6">
@@ -132,22 +280,43 @@ export default function ApprovalPanel({ email, route, onApprove, onReject }) {
 
       {/* Action Buttons */}
       <div className={`flex gap-3 pt-5 border-t ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-        <button
-          onClick={handleApprove}
-          disabled={!editedResponse}
-          className={`flex-1 py-3.5 px-5 rounded-xl font-bold text-sm shadow-lg transition-all duration-300 ${
-            editedResponse
-              ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white ring-1 ring-emerald-500/40 hover:shadow-xl hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98]'
-              : isDark 
-                ? 'bg-white/5 text-slate-500 cursor-not-allowed ring-1 ring-white/10'
-                : 'bg-slate-100 text-slate-400 cursor-not-allowed ring-1 ring-slate-200'
-          }`}
-        >
-          <span className="flex items-center justify-center gap-2">
-            <span aria-hidden="true">✓</span>
-            Approve & Send
-          </span>
-        </button>
+        {route === 'REDIRECT' ? (
+          // Forward button for REDIRECT route
+          <button
+            onClick={handleRedirect}
+            disabled={!isRedirectValid()}
+            className={`flex-1 py-3.5 px-5 rounded-xl font-bold text-sm shadow-lg transition-all duration-300 ${
+              isRedirectValid()
+                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white ring-1 ring-blue-500/40 hover:shadow-xl hover:shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98]'
+                : isDark 
+                  ? 'bg-white/5 text-slate-500 cursor-not-allowed ring-1 ring-white/10'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed ring-1 ring-slate-200'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <span aria-hidden="true">↗️</span>
+              Forward Email
+            </span>
+          </button>
+        ) : (
+          // Approve button for AI_AGENT and HUMAN_REQUIRED routes
+          <button
+            onClick={handleApprove}
+            disabled={!editedResponse}
+            className={`flex-1 py-3.5 px-5 rounded-xl font-bold text-sm shadow-lg transition-all duration-300 ${
+              editedResponse
+                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white ring-1 ring-emerald-500/40 hover:shadow-xl hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98]'
+                : isDark 
+                  ? 'bg-white/5 text-slate-500 cursor-not-allowed ring-1 ring-white/10'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed ring-1 ring-slate-200'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <span aria-hidden="true">✓</span>
+              Approve & Send
+            </span>
+          </button>
+        )}
         <button
           onClick={handleReject}
           className={`flex-1 py-3.5 px-5 rounded-xl font-bold text-sm shadow-lg ring-1 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${

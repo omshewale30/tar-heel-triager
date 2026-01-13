@@ -19,10 +19,10 @@ Base = declarative_base()
 
 # Add endpoint to forward email
 
-class ForwardEmailRequest(BaseModel):
+class RedirectEmailRequest(BaseModel):
     approval_id: str
-    department: str
-    comment: Optional[str] = ""
+    redirect_department_email: Optional[str] = None
+    comment: Optional[str] = None
 
 
 
@@ -38,7 +38,32 @@ class Email:
     received_at: str  # Kept as string for simplicity with JSON
     is_read: bool
 
+class EmailTriageRequest(BaseModel):
+    email_id: str
+    subject: str
+    body: str
+    sender: str
+    sender_email: str
+    received_at: str
 
+
+class TriageResponse(BaseModel):
+    email_id: str
+    category: str
+    priority: int
+    suggested_response: Optional[str]
+    confidence: float
+    requires_approval: bool
+    route: str  # 'auto_faq' | 'manual' | 'urgent'
+
+
+class ApproveResponse(BaseModel):
+    approval_id: str
+    staff_edits: Optional[str] = ""
+
+
+class RejectResponse(BaseModel):
+    approval_id: str
 
 
 
@@ -92,7 +117,7 @@ class EmailHistory(Base):
     route = Column(String(20))
     final_response = Column(Text)
     confidence = Column(Float)
-    approval_status = Column(String(20))  # 'approved', 'rejected', 'edited'
+    approval_status = Column(String(20))  # 'approved', 'rejected', 'edited', 'redirected'
     processed_at = Column(DateTime, default=datetime.now)
     
     def __repr__(self):

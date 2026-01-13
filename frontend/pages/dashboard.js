@@ -6,7 +6,7 @@ import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails
 import { useMsal } from '@azure/msal-react';
 import Head from 'next/head';
 import { useTheme } from '../lib/ThemeContext';
-
+import { redirect_department_dict } from '../lib/constants';
 // Toast notification component
 function Toast({ message, type, onClose, isDark }) {
   useEffect(() => {
@@ -139,6 +139,7 @@ function DashboardContent() {
   const [triageProgress, setTriageProgress] = useState(null); // { progress, step, status }
   const { instance, accounts } = useMsal();
   const { isDark } = useTheme();
+  const [department, setDepartment] = useState(redirect_department_dict);
 
   useEffect(() => {
     setMounted(true);
@@ -195,6 +196,19 @@ function DashboardContent() {
     } catch (error) {
       console.error('Error rejecting response:', error);
       showToast('Error marking email as rejected', 'error');
+    }
+  };
+  const handleRedirect = async (approvalId, redirectDepartmentEmail, comment) => {
+    try {
+      const response = await redirectEmail(instance, accounts, approvalId, redirectDepartmentEmail, comment);
+      if (response.ok) {
+        showToast('Email redirected successfully', 'success');
+        loadApprovalQueue();
+        setSelectedEmail(null);
+      }
+    } catch (error) {
+      console.error('Error redirecting email:', error);
+      showToast('Error redirecting email', 'error');
     }
   };
 
@@ -675,6 +689,7 @@ function DashboardContent() {
                     handleApprove(selectedEmail.id, editedResponse)
                   }
                   onReject={() => handleReject(selectedEmail.id)}
+                  onRedirect={(redirectEmail, comment) => handleRedirect(selectedEmail.id, redirectEmail, comment)}
                 />
               ) : (
                 <div className={`rounded-2xl p-6 ring-1 backdrop-blur-xl min-h-[400px] transition-colors duration-300 ${

@@ -85,7 +85,7 @@ class EmailClient:
                 json=payload
             )
             return response.status_code == 200
-    async def forward_email(self, email_id: str, department_name: str, department_email: str, comment: str = "") -> dict[str, Any]:
+    async def forward_email(self, email_id: str, redirect_department_email: str, comment: str = "") -> dict[str, Any]:
         """
         Forward an email to another department.
         
@@ -100,8 +100,7 @@ class EmailClient:
             "toRecipients": [
                 {
                     "emailAddress": {
-                        "name": department_name,
-                        "address": department_email,
+                        "address": redirect_department_email,
                     },
                 },
             ],
