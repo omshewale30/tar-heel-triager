@@ -76,7 +76,7 @@ class EmailClassifier:
             
             try:
                 response = self.llm.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-5-chat",
                     messages=[
                         {"role": "system", "content": prompt},
                         {"role": "user", "content": user_content}

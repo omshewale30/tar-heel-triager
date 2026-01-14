@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ApprovalPanel from '../components/ApprovalPanel';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
-import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue, rejectResponse, deleteApproval, fetchTriageEmailsStream } from '../api';
+import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue, rejectResponse, deleteApproval, fetchTriageEmailsStream, redirectEmail } from '../api';
 import { useMsal } from '@azure/msal-react';
 import Head from 'next/head';
 import { useTheme } from '../lib/ThemeContext';
@@ -543,8 +543,15 @@ function DashboardContent() {
                             </Badge>
                           )}
                         </div>
-                        <div className={`text-xs mb-2 truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                          {email.sender_email}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {email.sender_email}
+                          </div>
+                          {email.received_at && (
+                            <div className={`text-xs whitespace-nowrap ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                              {new Date(email.received_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </div>
+                          )}
                         </div>
                         {email.route === 'REDIRECT' && email.redirect_department && (
                           <div className={`text-xs mb-3 flex items-center gap-1.5 ${isDark ? 'text-[#7BAFD4]' : 'text-[#0B1F3A]'}`}>
@@ -593,16 +600,16 @@ function DashboardContent() {
                           <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>From</span>
                           <span className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{selectedEmail.sender_email}</span>
                         </div>
-                        {selectedEmail.created_at && (
+                        {selectedEmail.received_at && (
                           <div className="flex flex-col gap-1">
                             <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Received</span>
                             <span className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
-                              {new Date(selectedEmail.created_at).toLocaleDateString('en-US', {
+                              {new Date(selectedEmail.received_at).toLocaleDateString('en-US', {
                                 weekday: 'short',
                                 year: 'numeric',
                                 month: 'short',
                                 day: 'numeric'
-                              })} at {new Date(selectedEmail.created_at).toLocaleTimeString('en-US', {
+                              })} at {new Date(selectedEmail.received_at).toLocaleTimeString('en-US', {
                                 hour: '2-digit',
                                 minute: '2-digit'
                               })}

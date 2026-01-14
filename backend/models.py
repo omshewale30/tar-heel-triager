@@ -82,6 +82,8 @@ class ApprovalQueue(Base):
     subject = Column(Text)
     sender_email = Column(String(255))
     body = Column(Text)
+    received_at = Column(DateTime, default=datetime.now)
+    is_read = Column(Boolean, default=False)
     route = Column(String(20))
     redirect_department = Column(String(255), nullable=True)
     generated_response = Column(Text)
@@ -115,10 +117,12 @@ class EmailHistory(Base):
     subject = Column(Text)
     sender_email = Column(String(255))
     route = Column(String(20))
+    redirect_department = Column(String(255), nullable=True)
     final_response = Column(Text)
     confidence = Column(Float)
     approval_status = Column(String(20))  # 'approved', 'rejected', 'edited', 'redirected'
     processed_at = Column(DateTime, default=datetime.now)
+    received_at = Column(DateTime, default=datetime.now)
     
     def __repr__(self):
         return f"<EmailHistory(id={self.id}, email_id={self.email_id}, status={self.approval_status})>"

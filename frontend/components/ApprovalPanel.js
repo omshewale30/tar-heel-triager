@@ -7,6 +7,7 @@ export default function ApprovalPanel({ email, route, onApprove, onReject, onRed
   const [editedResponse, setEditedResponse] = useState('');
   const [feedback, setFeedback] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
+  
   const [customEmail, setCustomEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [redirectComment, setRedirectComment] = useState('');

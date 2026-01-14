@@ -260,6 +260,7 @@ async def get_approval_queue(route: str = "AI_AGENT"):
             'generated_response': result.generated_response,
             'route': result.route,
             'redirect_department': result.redirect_department,
+            'received_at': result.received_at.isoformat() if result.received_at else None,
             'confidence': result.confidence,
             'created_at': result.created_at.isoformat() if result.created_at else None
         } for result in results]
@@ -389,6 +390,8 @@ async def reject_response(request: RejectResponse):
             subject=approval.subject,
             sender_email=approval.sender_email,
             route=approval.route,
+            redirect_department=approval.redirect_department,
+            received_at=approval.received_at,
             final_response=None,
             confidence=approval.confidence,
             approval_status='rejected',
@@ -460,6 +463,7 @@ async def get_email_history():
             'final_response': result.final_response,
             'confidence': result.confidence,
             'approval_status': result.approval_status,
+            'received_at': result.received_at.isoformat() if result.received_at else None,
             'processed_at': result.processed_at.isoformat() if result.processed_at else None
         } for result in results]
     

@@ -1,5 +1,5 @@
 #This file abstracts the email preprocessing like fetching, sending to the azure client and returns the result of fetch-triage
-
+#TODO: add a function to check if the email is already in the approval queue or history
 from datetime import datetime
 from typing import Optional, AsyncGenerator, Dict, Any
 import asyncio
@@ -141,6 +141,7 @@ class EmailEngine:
                 sender_email=email.sender_email,
                 body=email.body,
                 route='REDIRECT',
+                received_at=email.received_at,
                 redirect_department=classification.redirect_department,
                 confidence=classification.confidence,
                 agent_used=False,
@@ -172,6 +173,7 @@ class EmailEngine:
                 subject=email.subject,
                 sender_email=email.sender_email,
                 body=email.body,
+                received_at=email.received_at,
                 route='HUMAN_REQUIRED',
                 confidence=classification.confidence,
                 agent_used=False,
@@ -218,6 +220,7 @@ class EmailEngine:
                 sender_email=email.sender_email,
                 body=email.body,
                 route='AI_AGENT',
+                received_at=email.received_at,
                 generated_response=response['response'],
                 confidence=classification.confidence,
                 agent_used=True,

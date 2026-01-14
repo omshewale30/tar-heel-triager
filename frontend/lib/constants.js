@@ -1,7 +1,7 @@
 export const redirect_department_dict = {
-    "Library": "library@unc.edu",
-    "Parking & Transportation": "parking@unc.edu",
-    "Housing": "housing@unc.edu",
-    "Registrar": "registrar@unc.edu",
-    "OSSA": "ossa@unc.edu",
+    "Library": "omshewale030@gmail.com",
+    "Parking & Transportation": "omshewale030@gmail.com",
+    "Housing": "omshewale030@gmail.com",
+    "Registrar": "omshewale030@gmail.com",
+    "OSSA": "omshewale030@gmail.com",
 }

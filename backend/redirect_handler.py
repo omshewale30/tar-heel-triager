@@ -58,6 +58,8 @@ class RedirectHandler:
                 subject=approval.subject,
                 sender_email=approval.sender_email,
                 route=approval.route,
+                redirect_department=approval.redirect_department,
+                received_at=approval.received_at,
                 final_response=f"Redirected to {redirect_request.redirect_department_email} with comment {redirect_request.comment}",
                 confidence=approval.confidence,
                 approval_status='redirected',
