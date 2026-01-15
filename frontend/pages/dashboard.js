@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ApprovalPanel from '../components/ApprovalPanel';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
-import { fetchUserEmails, fetchPendingEmails, approveResponse, fetchTriageEmails, getApprovalQueue, rejectResponse, deleteApproval, fetchTriageEmailsStream, redirectEmail } from '../api';
+import {approveResponse, getApprovalQueue, rejectResponse, deleteApproval, fetchTriageEmailsStream, redirectEmail } from '../api';
 import { useMsal } from '@azure/msal-react';
 import Head from 'next/head';
 import { useTheme } from '../lib/ThemeContext';
@@ -131,8 +131,6 @@ function DashboardContent() {
   const [approvalQueue, setApprovalQueue] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [filterRoute, setFilterRoute] = useState('AI_AGENT');
-  const [fetchingEmails, setFetchingEmails] = useState(false);
-  const [fetchStatus, setFetchStatus] = useState(null);
   const [fetchingTriage, setFetchingTriage] = useState(false);
   const [toast, setToast] = useState(null);
   const [mounted, setMounted] = useState(false);
@@ -231,37 +229,6 @@ function DashboardContent() {
     }
   };
 
-  const handleFetchEmails = async () => {
-    setFetchingEmails(true);
-    setFetchStatus(null);
-    
-    try {
-      const response = await fetchUserEmails(instance, accounts);
-      if (response.ok) {
-        const data = await response.json();
-        setFetchStatus({
-          type: 'success',
-          message: `Found ${data.email_count} unread email(s)`,
-          emails: data.emails
-        });
-      } else {
-        const error = await response.json();
-        setFetchStatus({
-          type: 'error',
-          message: error.detail || 'Failed to fetch emails'
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching emails:', error);
-      setFetchStatus({
-        type: 'error',
-        message: error.message
-      });
-    } finally {
-      setFetchingEmails(false);
-    }
-  };
-
   const handleFetchTriage = async () => {
     setFetchingTriage(true);
     setTriageProgress({ progress: 0, step: 'Starting...', status: 'loading' });
@@ -354,29 +321,6 @@ function DashboardContent() {
               </div>
               
               <div className="flex flex-wrap items-center gap-4">
-                <button
-                  onClick={handleFetchEmails}
-                  disabled={fetchingEmails}
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold shadow-lg transition-all duration-300 ${
-                    fetchingEmails
-                      ? isDark 
-                        ? 'bg-white/5 text-slate-500 cursor-not-allowed ring-1 ring-white/10'
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed ring-1 ring-slate-200'
-                      : 'bg-gradient-to-r from-[#7BAFD4] to-[#6AA3CC] text-[#0B1F3A] ring-1 ring-[#7BAFD4]/40 hover:shadow-xl hover:shadow-[#7BAFD4]/20 hover:scale-[1.02] active:scale-[0.98]'
-                  }`}
-                >
-                  {fetchingEmails ? (
-                    <>
-                      <Spinner />
-                      Fetching...
-                    </>
-                  ) : (
-                    <>
-                      <span aria-hidden="true">📧</span>
-                      Fetch My Emails
-                    </>
-                  )}
-                </button>
                 
                 <button
                   onClick={handleFetchTriage}
@@ -414,49 +358,6 @@ function DashboardContent() {
                 </div>
               </div>
             </div>
-            
-            {/* Fetch Status Message */}
-            {fetchStatus && (
-              <div className={`mt-6 rounded-xl p-4 ring-1 backdrop-blur-sm ${
-                fetchStatus.type === 'success' 
-                  ? 'bg-emerald-500/10 ring-emerald-500/20' 
-                  : 'bg-red-500/10 ring-red-500/20'
-              }`}>
-                <div className="flex items-start gap-3">
-                  <span className={fetchStatus.type === 'success' ? 'text-emerald-400' : 'text-red-400'}>
-                    {fetchStatus.type === 'success' ? '✓' : '✗'}
-                  </span>
-                  <div className="flex-1">
-                    <p className={`text-sm font-medium ${fetchStatus.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {fetchStatus.message}
-                    </p>
-                    {fetchStatus.emails && fetchStatus.emails.length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        {fetchStatus.emails.slice(0, 3).map((email, idx) => (
-                          <div key={idx} className="text-xs text-emerald-300/80">
-                            • {email.subject} — from {email.sender_email}
-                          </div>
-                        ))}
-                        {fetchStatus.emails.length > 3 && (
-                          <div className="text-xs text-emerald-300/60 italic">
-                            ...and {fetchStatus.emails.length - 3} more
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <button 
-                    onClick={() => setFetchStatus(null)}
-                    className={`transition-colors ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
-                    aria-label="Dismiss"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 

@@ -1,2 +1,4 @@
+TODO: Display # unread emails in the SSE, display the classification result
+TODO: 
 TODO: before sending the reply check if that email is still unread, if it is then only send, otherwise let the user know that the email has been read or replied 
 

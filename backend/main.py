@@ -36,8 +36,8 @@ async def lifespan(app: FastAPI):
     await app.state.http_client.aclose()
 
 app = FastAPI(
-    title="UNC Cashier Email Triage API",
-    description="Email triage and response system for UNC Cashier's Office",
+    title="Heelper AI API",
+    description="Email triage and response system for Heelper AI",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -67,95 +67,6 @@ async def root():
         "status": "running",
         "version": "1.0.0"
     }
-
-
-@app.post("/triage-email", response_model=TriageResponse)
-async def triage_email(request: EmailTriageRequest):
-    """
-    Main endpoint: classify → decide route → generate response if FAQ
-    
-    Routing logic:
-    - HIGH priority (7+): → manual (urgent_queue)
-    - Classified as FAQ + eligible: → agent (auto-generates response)
-    - Complex/unsure: → manual (complex_queue)
-    """
-    try:
-        # Step 1: Classify email
-        classification = await classifier.classify_email(
-            request.subject, 
-            request.body
-        )
-        
-        # Step 2: Score priority
-        priority_data = priority_scorer.score({
-            'subject': request.subject,
-            'body': request.body,
-            'sender_type': request.sender,
-            'sender_email': request.sender_email
-        })
-        priority = priority_data['priority_level']
-        
-        # Step 3: Routing decision
-        if priority >= 7:
-            # URGENT: Send to manual review
-            route = 'urgent'
-            suggested_response = None
-            confidence = 0.0
-            agent_used = False
-            
-        elif classification['faq_eligible'] and classification['confidence'] > 0.85:
-            # FAQ ELIGIBLE: Use Azure AI Foundry Agent
-            route = 'auto_faq'
-            agent_result = await agent.query_faq_agent(request.body)
-            
-            if agent_result.get('agent_used', False) and agent_result.get('response'):
-                suggested_response = agent_result['response']
-                confidence = agent_result.get('confidence', 0.85)
-                agent_used = True
-            else:
-                # Fallback: agent failed
-                route = 'manual'
-                suggested_response = None
-                confidence = 0.0
-                agent_used = False
-        
-        else:
-            # Complex case: Send to manual review
-            route = 'manual'
-            suggested_response = None
-            confidence = 0.0
-            agent_used = False
-        
-        # Step 4: Store in approval queue
-        approval_record = ApprovalQueue(
-            email_id=request.email_id,
-            subject=request.subject,
-            sender_email=request.sender_email,
-            body=request.body,
-            category=classification['category'],
-            priority=priority,
-            generated_response=suggested_response,
-            route=route,
-            confidence=confidence,
-            agent_used=agent_used,
-            requires_approval=True,
-            created_at=datetime.now()
-        )
-        db.add(approval_record)
-        db.commit()
-        
-        return TriageResponse(
-            email_id=request.email_id,
-            category=classification['category'],
-            priority=priority,
-            suggested_response=suggested_response,
-            confidence=confidence,
-            requires_approval=True,
-            route=route
-        )
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/approve-response")
@@ -338,36 +249,6 @@ async def fetch_triage_stream(request: HTTPAuthorizationCredentials = Depends(se
     )
 
 
-@app.post("/fetch-user-emails")
-async def fetch_user_emails(request: HTTPAuthorizationCredentials = Depends(security)):
-    """
-    Fetches unreademails from the authenticated user's mailbox using their access token
-    This uses delegated permissions (Mail.Read) - the user's token allows reading their own emails
-    
-    Args:
-        request: HTTPAuthorizationCredentials
-    """
-    try:
-        access_token = request.credentials
-
-        if not access_token:
-            raise HTTPException(status_code=401, detail="Invalid or expired access_token")
-        
-        email_client = EmailClient(access_token=access_token)
-        if not email_client:
-            raise HTTPException(status_code=400, detail="access_token is required")
-        emails = await email_client.get_unread_emails()
-
-    
-        return {
-            "email_count": len(emails),
-            "emails": emails,
-            "message": f"Successfully fetched {len(emails)} unread email(s)",
-        }
-
-    except httpx.HTTPStatusError as e:
-        print(f"Error fetching user emails: {e}")
-        raise HTTPException(status_code=e.response.status_code, detail=f"Graph API error: {e.response.text}")
 
 
 @app.post("/reject-response")

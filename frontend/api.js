@@ -4,31 +4,6 @@ This file contains the API calls for the frontend
 
 
 
-export const fetchUserEmails = async (instance, accounts) => {
-    const graphScopes = ['https://graph.microsoft.com/Mail.Read'];
-    if (!accounts.length) {
-        throw new Error('No accounts found');
-    }
-
-    const tokenResponse = await instance.acquireTokenSilent({
-        scopes: graphScopes,
-        account: accounts[0]
-    });
-    
-    const accessToken = tokenResponse.accessToken;
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/fetch-user-emails`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`
-        }
-    });
-
-    return response;
-};
-
-
 export const rejectResponse = async (approvalId) => {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/reject-response`, {
         method: 'POST',
