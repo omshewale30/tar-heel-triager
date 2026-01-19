@@ -4,10 +4,12 @@ from azure.ai.projects import AIProjectClient
 from openai import AzureOpenAI
 from dotenv import load_dotenv
 load_dotenv()
+from config.logging import get_logger
+from config.settings import settings
 
-import logging
-logging.basicConfig(level=logging.WARNING)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+
 
 
 class AzureAIClient:
@@ -45,7 +47,7 @@ class AzureAIClient:
         
         if missing_vars:
             error_msg = f"Missing required Azure environment variables: {', '.join(missing_vars)}"
-            logger.error(f"ERROR: {error_msg}")
+            logger.error(error_msg)
             raise ValueError(error_msg)
         try:
             credential = ClientSecretCredential(
@@ -57,12 +59,12 @@ class AzureAIClient:
                 credential=credential,
                 endpoint=self.project_endpoint
             )
-            logger.info(f"Azure client setup successfully")
+            logger.info("Azure client setup successfully", extra={"project_client": self.project_client})
 
             return self.project_client
         except Exception as e:
             error_msg = f"Failed to create Azure client: {str(e)}"
-            logger.error(f"ERROR: {error_msg}")
+            logger.error(error_msg)
             raise Exception(error_msg)
     
     def get_llm(self):
@@ -81,13 +83,13 @@ class AzureAIClient:
         agent_id = self.agent_id
         if not agent_id:
             error_msg = "AZURE_AGENT_ID is not set"
-            logger.error(f"ERROR: {error_msg}")
+            logger.error(error_msg)
             raise ValueError(error_msg)
         try:
             agent = self.project_client.agents.get_agent(agent_id)
-            logger.info(f"Agent {agent_id} retrieved successfully")
+            logger.info(f"Agent {agent_id} retrieved successfully", extra={"agent": agent})
             return agent
         except Exception as e:
             error_msg = f"Failed to get agent: {str(e)}"
-            logger.error(f"ERROR: {error_msg}")
+            logger.error(error_msg)
             raise Exception(error_msg)

@@ -3,25 +3,12 @@ Email Classification Model using OpenAI
 Classifies student billing emails and determines if they're FAQ-eligible
 """
 import json
-import os
-from typing import Dict, Optional, Any
+from typing import Any
 from openai import AzureOpenAI
-from dotenv import load_dotenv
-from azure.azure_ai_client import AzureAIClient
-from models import Email
-from pydantic import BaseModel
+from schemas import Email, EmailClassification
 from prompts import triage_prompt
 
-load_dotenv()
 
-
-class EmailClassification(BaseModel):
-    email_id: str
-    email: Email
-    route: str
-    confidence: float
-    reason: str
-    redirect_department: Optional[str] = None
 
 class EmailClassifier:
     """Email classification using Azure AI Foundry llm"""
@@ -33,8 +20,6 @@ class EmailClassifier:
         Args:
             llm: AzureOpenAI llm
         """
-
-        
         self.llm = llm
     
     async def classify_emails(self, emails: list[Email], email_threads_dict: dict[str, list[dict[str, Any]]], email_reader) -> tuple[list[EmailClassification], list[EmailClassification], list[EmailClassification]]:
