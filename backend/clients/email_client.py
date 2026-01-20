@@ -2,19 +2,11 @@
 Microsoft Graph Email Reader for UNC Cashier Email Triage
 Fetches unread emails and marks them as read after processing
 """
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
-from datetime import datetime
-import os
-from msgraph import GraphServiceClient
-from azure.identity import DefaultAzureCredential
-from dotenv import load_dotenv
-from azure.identity import ClientSecretCredential
+from typing import Any
 import asyncio
 import httpx
 import re
-from models import Email
-from fastapi import HTTPException
+from schemas import Email
 
 class EmailClient:
     """

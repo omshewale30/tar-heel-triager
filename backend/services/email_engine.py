@@ -1,29 +1,31 @@
 #This file abstracts the email preprocessing like fetching, sending to the azure client and returns the result of fetch-triage
 #TODO: add a function to check if the email is already in the approval queue or history
 from datetime import datetime
-from typing import Optional, AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any
 import asyncio
 import json
 
-from models import ApprovalQueue, EmailHistory, db
-from email_client import EmailClient
-from models import Email
+from sqlalchemy.orm import Session
+from db import ApprovalQueue, EmailHistory
+
+
 
 class EmailEngine:
 
-    def __init__(self,emails, email_client,agent,classifier) -> None:
-        self.email_client= email_client
+    def __init__(self, emails, email_client, agent, classifier, db: Session) -> None:
+        self.email_client = email_client
         self.agent = agent
         self.emails = emails
         self.email_threads_dict = {}
         self.classifier = classifier
+        self.db = db
         self.counts = {"processed": 0, "skipped": 0, "human": 0, "redirect": 0, "ai_agent": 0}
     
 
     def is_duplicate(self, email_id: str) -> bool:
         """Check if email already exists in pending queue or history"""
-        existing_pending = db.query(ApprovalQueue).filter_by(email_id=email_id, rejected=False, approved=False).first()
-        existing_processed = db.query(EmailHistory).filter_by(email_id=email_id).first()
+        existing_pending = self.db.query(ApprovalQueue).filter_by(email_id=email_id, rejected=False, approved=False).first()
+        existing_processed = self.db.query(EmailHistory).filter_by(email_id=email_id).first()
         return existing_pending is not None or existing_processed is not None
 
 
@@ -52,7 +54,7 @@ class EmailEngine:
 
         self.counts["processed"] = self.counts["redirect"] + self.counts["human"] + self.counts["ai_agent"]
         if self.counts["processed"] > 0:
-            db.commit()
+            self.db.commit()
 
         return self._get_result()
 
@@ -93,13 +95,13 @@ class EmailEngine:
             # Commit and complete
             self.counts["processed"] = self.counts["redirect"] + self.counts["human"] + self.counts["ai_agent"]
             if self.counts["processed"] > 0:
-                db.commit()
+                self.db.commit()
 
             yield self._sse_event({'status': 'done', 'progress': 100, 'step': 'Complete!', 'results': self.counts})
 
-        except Exception as e:
-            db.rollback()
-            yield self._sse_event({'status': 'error', 'message': str(e)})
+        except Exception as e:  
+            self.db.rollback()  # Rollback the transaction on error
+            yield self._sse_event({'status': 'error', 'message': str(e)})  
 
     def _sse_event(self, data: Dict[str, Any]) -> str:
         """Format data as SSE event"""
@@ -133,7 +135,7 @@ class EmailEngine:
                 self.counts["skipped"] += 1
                 continue
             
-            db.add(ApprovalQueue(
+            self.db.add(ApprovalQueue(
                 email_id=email.id,
                 conversation_id=email.conversation_id,
                 conversation_index=email.conversation_index,
@@ -166,7 +168,7 @@ class EmailEngine:
                 self.counts["skipped"] += 1
                 continue
             
-            db.add(ApprovalQueue(
+            self.db.add(ApprovalQueue(
                 email_id=email.id,
                 conversation_id=email.conversation_id,
                 conversation_index=email.conversation_index,
@@ -212,7 +214,7 @@ class EmailEngine:
         response = await self.agent.query_agent(email.subject, email.body, thread_context)
         
         if response and response.get('response'):
-            db.add(ApprovalQueue(
+            self.db.add(ApprovalQueue(
                 email_id=email.id,
                 conversation_id=email.conversation_id,
                 conversation_index=email.conversation_index,

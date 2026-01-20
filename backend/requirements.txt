@@ -28,6 +28,6 @@ pytest-asyncio==0.21.1
 # Optional: For production deployment
 gunicorn==21.2.0
 
+# Pydantic
 pydantic
-openai
-logging
+pydantic-settings

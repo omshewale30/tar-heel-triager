@@ -1,5 +1,4 @@
-
-azure_agent_prompt = """
+draft_agent_prompt = """
 # UNC Cashier's Office - Email Reply Agent
 
 ## Role

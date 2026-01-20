@@ -1,9 +1,7 @@
-import os
+
 from azure.identity import ClientSecretCredential
 from azure.ai.projects import AIProjectClient
 from openai import AzureOpenAI
-from dotenv import load_dotenv
-load_dotenv()
 from config.logging import get_logger
 from config.settings import settings
 
@@ -20,11 +18,11 @@ class AzureAIClient:
         """
         Initialize the Azure client
         """
-        self.project_endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT")
-        self.tenant_id = os.getenv("AZURE_AD_TENANT_ID")
-        self.client_id = os.getenv("AZURE_AD_CLIENT_ID")
-        self.client_secret = os.getenv("AZURE_AD_CLIENT_SECRET")
-        self.agent_id = os.getenv("AZURE_AGENT_ID")
+        self.project_endpoint = settings.azure_ai_project_endpoint
+        self.tenant_id = settings.azure_ad_tenant_id
+        self.client_id = settings.azure_ad_client_id
+        self.client_secret = settings.azure_ad_client_secret
+        self.agent_id = settings.azure_ai_agent_id
         self.project_client = self.setup_azure_client()
         self.agent = self.get_agent()
         self.llm = self.get_llm()
@@ -71,8 +69,8 @@ class AzureAIClient:
 
         llm = AzureOpenAI(
             api_version="2024-12-01-preview",
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            azure_endpoint=os.getenv("AZURE_AI_RESOURCE_ENDPOINT")
+            api_key=settings.azure_openai_key,
+            azure_endpoint=settings.azure_ai_resource_endpoint
         )
         return llm
 

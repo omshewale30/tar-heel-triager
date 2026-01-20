@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, StreamingResponse
-from fastapi.security import HTTPAuthorizationCredentials
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from clients.email_client import EmailClient
 from api.dependencies import get_email_client
 from db import get_db
 from sqlalchemy.orm import Session
-from email_engine import EmailEngine
 import json
+from clients.azure_ai_client import AzureAIClient
+from api.dependencies import get_azure_ai_client
+from services.classifier import EmailClassifier
+from services.email_engine import EmailEngine
 
 router = APIRouter(tags=["triage"])
 
@@ -13,7 +16,8 @@ router = APIRouter(tags=["triage"])
 @router.get("/fetch-triage-stream")
 async def fetch_triage_stream(
     email_client: EmailClient = Depends(get_email_client),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    azure_ai_client: AzureAIClient = Depends(get_azure_ai_client)
 ):
     async def event_generator():
         try:
@@ -27,9 +31,9 @@ async def fetch_triage_stream(
             
             total = len(emails)
             yield f"data: {json.dumps({'status': 'found', 'count': total, 'progress': 10, 'step': f'Found {total} unread email(s)'})}\n\n"
-            
+            email_classifier = EmailClassifier(llm=azure_ai_client.llm)
             # Use EmailEngine's streaming method
-            email_engine = EmailEngine(emails=emails, email_client=email_client, agent=agent, classifier=classifier)
+            email_engine = EmailEngine(emails=emails, email_client=email_client, agent=azure_ai_client.agent, classifier=email_classifier, db=db)
             async for event in email_engine.process_emails_stream():
                 yield event
                 
