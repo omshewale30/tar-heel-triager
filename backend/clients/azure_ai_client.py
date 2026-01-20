@@ -4,6 +4,7 @@ from azure.ai.projects import AIProjectClient
 from openai import AzureOpenAI
 from config.logging import get_logger
 from config.settings import settings
+from services.agent_handler import AzureAIFoundryAgent
 
 logger = get_logger(__name__)
 
@@ -22,7 +23,7 @@ class AzureAIClient:
         self.tenant_id = settings.azure_ad_tenant_id
         self.client_id = settings.azure_ad_client_id
         self.client_secret = settings.azure_ad_client_secret
-        self.agent_id = settings.azure_ai_agent_id
+        self.agent_id = settings.azure_agent_id
         self.project_client = self.setup_azure_client()
         self.agent = self.get_agent()
         self.llm = self.get_llm()
@@ -76,7 +77,7 @@ class AzureAIClient:
 
     def get_agent(self):
         """
-        Get the agent from the project client
+        Get the AzureAIFoundryAgent wrapper with query_agent method
         """
         agent_id = self.agent_id
         if not agent_id:
@@ -84,9 +85,11 @@ class AzureAIClient:
             logger.error(error_msg)
             raise ValueError(error_msg)
         try:
-            agent = self.project_client.agents.get_agent(agent_id)
-            logger.info(f"Agent {agent_id} retrieved successfully", extra={"agent": agent})
-            return agent
+            # Verify agent exists
+            raw_agent = self.project_client.agents.get_agent(agent_id)
+            logger.info(f"Agent {agent_id} retrieved successfully", extra={"agent": raw_agent})
+            # Return the wrapper class that has query_agent method
+            return AzureAIFoundryAgent(self.project_client)
         except Exception as e:
             error_msg = f"Failed to get agent: {str(e)}"
             logger.error(error_msg)

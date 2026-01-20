@@ -7,6 +7,7 @@ from typing import Any
 from openai import AzureOpenAI
 from schemas import Email, EmailClassification
 from prompts import triage_prompt
+from services.formatter import format_thread_classification_context
 
 
 
@@ -22,7 +23,7 @@ class EmailClassifier:
         """
         self.llm = llm
     
-    async def classify_emails(self, emails: list[Email], email_threads_dict: dict[str, list[dict[str, Any]]], email_reader) -> tuple[list[EmailClassification], list[EmailClassification], list[EmailClassification]]:
+    async def classify_emails(self, emails: list[Email], email_threads_dict: dict[str, list[dict[str, Any]]]) -> tuple[list[EmailClassification], list[EmailClassification], list[EmailClassification]]:
         """
         Classify emails, the llm will return a list of dictionaries, each dictionary is a classification result for an 
         email thread, the classification will be either 'AI_AGENT' or 'HUMAN_REQUIRED' or 'REDIRECT'
@@ -30,7 +31,6 @@ class EmailClassifier:
         Args:
             emails: List of Email objects to classify
             email_threads_dict: Dict mapping email_id -> list of thread messages
-            email_reader: EmailReader instance for formatting thread context
         
         Returns:
             tuple[list[EmailClassification], list[EmailClassification], list[EmailClassification]]
@@ -46,7 +46,7 @@ class EmailClassifier:
             # Format context based on whether it's a thread or single email
             if thread_messages and len(thread_messages) > 1:
                 # Multi-message thread - use full thread context for accurate classification
-                user_content = email_reader.format_thread_classification_context(thread_messages, email.id)
+                user_content = format_thread_classification_context(thread_messages, email.id)
             else:
                 # Single email - just use subject and body
                 usercontent = "=== EMAIL TO CLASSIFY (SINGLE MESSAGE) ===\n"

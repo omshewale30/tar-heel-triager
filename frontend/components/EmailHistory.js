@@ -4,7 +4,7 @@
  * Supports light/dark mode
  */
 import { useState, useEffect } from 'react';
-import { getEmailHistory } from '../api';
+import { getEmailHistory, deleteEmailHistory } from '../api';
 import { useTheme } from '../lib/ThemeContext';
 
 // Spinner component
@@ -77,6 +77,24 @@ export default function EmailHistory() {
       setError(err.message || 'Failed to load email history');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (e, emailId) => {
+    e.stopPropagation();
+    try {
+      const response = await deleteEmailHistory(emailId);
+      if (response.ok) {
+        setHistory(prev => prev.filter(email => email.id !== emailId));
+        if (selectedEmail?.id === emailId) {
+          setSelectedEmail(null);
+        }
+      } else {
+        const err = await response.json();
+        setError(err.detail || 'Failed to delete email history');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to delete email history');
     }
   };
 
@@ -416,37 +434,52 @@ export default function EmailHistory() {
                   </div>
                 ) : (
                   <div className={`divide-y ${isDark ? 'divide-white/5' : 'divide-slate-100'}`}>
-                    {filteredHistory.map((email) => (
-                      <button
-                        key={email.id}
-                        onClick={() => setSelectedEmail(email)}
-                        className={`w-full text-left p-5 transition-all duration-200 ${
-                          selectedEmail?.id === email.id
-                            ? 'bg-[#7BAFD4]/10 border-l-2 border-[#7BAFD4]'
-                            : isDark 
-                              ? 'hover:bg-white/5'
-                              : 'hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <h3 className={`text-sm font-semibold line-clamp-2 flex-1 ${
-                            isDark ? 'text-white' : 'text-slate-900'
-                          }`}>
-                            {email.subject || 'No Subject'}
-                          </h3>
-                          {getStatusBadge(email.approval_status)}
-                        </div>
+{filteredHistory.map((email) => (
+                                      <div
+                                        key={email.id}
+                                        className={`relative w-full text-left p-5 transition-all duration-200 cursor-pointer ${
+                                          selectedEmail?.id === email.id
+                                            ? 'bg-[#7BAFD4]/10 border-l-2 border-[#7BAFD4]'
+                                            : isDark 
+                                              ? 'hover:bg-white/5'
+                                              : 'hover:bg-slate-50'
+                                        }`}
+                                        onClick={() => setSelectedEmail(email)}
+                                      >
+                                        {/* Delete button */}
+                                        <button
+                                          onClick={(e) => handleDelete(e, email.id)}
+                                          className={`absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 opacity-0 group-hover:opacity-100 hover:!opacity-100 ${
+                                            isDark 
+                                              ? 'bg-red-500/20 text-red-400 hover:bg-red-500/40' 
+                                              : 'bg-red-100 text-red-500 hover:bg-red-200'
+                                          }`}
+                                          style={{ opacity: 0.7 }}
+                                          title="Delete"
+                                        >
+                                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                          </svg>
+                                        </button>
+                                        <div className="flex items-start justify-between gap-3 mb-2 pr-6">
+                                          <h3 className={`text-sm font-semibold line-clamp-2 flex-1 ${
+                                            isDark ? 'text-white' : 'text-slate-900'
+                                          }`}>
+                                            {email.subject || 'No Subject'}
+                                          </h3>
+                                          {getStatusBadge(email.approval_status)}
+                                        </div>
                         <p className={`text-xs mb-3 truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                           {email.sender_email}
                         </p>
-                        <div className="flex items-center justify-between">
-                          {getRouteBadge(email.route)}
-                          <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                            {formatDate(email.processed_at)}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
+<div className="flex items-center justify-between">
+                                          {getRouteBadge(email.route)}
+                                          <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                                            {formatDate(email.processed_at)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
                   </div>
                 )}
               </div>

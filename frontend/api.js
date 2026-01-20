@@ -145,6 +145,15 @@ export const deleteApproval = async (approvalId) => {
     return response;
 };
 
+export const deleteEmailHistory = async (emailHistoryId) => {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/delete-email-history/${emailHistoryId}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+    return response;
+};
 export const redirectEmail = async (instance, accounts, approvalId, redirectDepartmentEmail, comment) => {
     const graphScopes = ['https://graph.microsoft.com/Mail.Read', 'https://graph.microsoft.com/Mail.Send'];
     if (!accounts.length) {

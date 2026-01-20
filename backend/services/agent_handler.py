@@ -2,45 +2,15 @@
 Azure AI Foundry Agent Handler
 Sends emails to Foundry Agent for FAQ responses
 """
-import os
-import re
 import asyncio
-from typing import Dict
-from dotenv import load_dotenv
+from typing import Any, Dict, Optional
 from azure.ai.projects import AIProjectClient
-
-load_dotenv()
-
-
-def clean_agent_response(raw_text: str) -> str:
-    """
-    Clean agent response by removing citation markers.
-    Links are now included by the agent at the bottom of the response.
-    
-    Args:
-        raw_text: Raw response from Azure AI agent
-        
-    Returns:
-        Cleaned text with citations removed
-    """
-    if not raw_text:
-        return ""
-    
-    # Remove citation markers like 【4:4†source】 or 【4:0†UNC_Cashier_FAQ.pdf】
-    citation_pattern = r'【[^】]*†[^】]*】'
-    cleaned_text = re.sub(citation_pattern, '', raw_text)
-    
-    # Remove trailing spaces on lines
-    cleaned_text = re.sub(r' +\n', '\n', cleaned_text)
-    # Remove multiple consecutive newlines (more than 2)
-    cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text)
-    cleaned_text = cleaned_text.strip()
-    
-    return cleaned_text
+from config.settings import settings
+from services.formatter import clean_agent_response
 
 
 class AzureAIFoundryAgent:
-    """Handler for Azure AI Foundry Agent queries"""
+    """Handler for Azure AI Foundry Agent queries using the Azure AI Project Client"""
     
     def __init__(self, project_client: AIProjectClient):
         """
@@ -50,9 +20,9 @@ class AzureAIFoundryAgent:
             project_client: Azure AI Foundry project client (sync version)
         """
         self.project_client = project_client
-        self.agent_id = os.getenv("AZURE_AGENT_ID")
+        self.agent_id = settings.azure_agent_id
     
-    async def query_agent(self, subject: str, email_body: str, thread_context: str = "") -> Dict:
+    async def query_agent(self, subject: str, email_body: str, thread_context: str = "") -> Dict[str, Any]:
         """
         Send email to Azure AI Foundry agent for FAQ response
         

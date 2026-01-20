@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     azure_ad_client_secret: str = os.getenv("AZURE_AD_CLIENT_SECRET")
     azure_openai_key: str = os.getenv("AZURE_OPENAI_KEY")
     azure_ai_resource_endpoint: str = os.getenv("AZURE_AI_RESOURCE_ENDPOINT")
-    azure_ai_agent_id: str = os.getenv("AZURE_AGENT_ID")
+    azure_agent_id: str = os.getenv("AZURE_AGENT_ID")
     
     class Config:
         env_file = ".env"

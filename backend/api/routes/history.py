@@ -25,3 +25,13 @@ async def get_email_history(db: Session = Depends(get_db)):
         'received_at': result.received_at.isoformat() if result.received_at else None,
         'processed_at': result.processed_at.isoformat() if result.processed_at else None
     } for result in results]
+
+
+@router.delete('/delete-email-history/{email_history_id}')
+async def delete_email_history(email_history_id: str, db: Session = Depends(get_db)):
+    email_history = db.query(EmailHistory).filter_by(id=email_history_id).first()
+    if not email_history:
+        raise HTTPException(status_code=404, detail="Email history not found")
+    db.delete(email_history)
+    db.commit()
+    return {"status": "success", "message": "Email history deleted"}

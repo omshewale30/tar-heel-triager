@@ -7,6 +7,7 @@ import json
 
 from sqlalchemy.orm import Session
 from db import ApprovalQueue, EmailHistory
+from services.formatter import format_thread_context
 
 
 
@@ -46,7 +47,7 @@ class EmailEngine:
         results = await asyncio.gather(*[self.fetch_thread(email) for email in self.emails])
         self.email_threads_dict = dict(results)
 
-        human_emails, agent_emails, redirect_emails = await self.classifier.classify_emails(self.emails, self.email_threads_dict, self.email_client)
+        human_emails, agent_emails, redirect_emails = await self.classifier.classify_emails(self.emails, self.email_threads_dict)
 
         self.process_redirect_emails(redirect_emails)
         self.process_human_emails(human_emails)
@@ -69,7 +70,7 @@ class EmailEngine:
             # Step 2: Classify
             yield self._sse_event({'progress': 30, 'step': 'Classifying emails...'})
             human_emails, agent_emails, redirect_emails = await self.classifier.classify_emails(
-                self.emails, self.email_threads_dict, self.email_client
+                self.emails, self.email_threads_dict
             )
             
             yield self._sse_event({
@@ -208,7 +209,7 @@ class EmailEngine:
         thread_messages = self.email_threads_dict.get(email.id, [])
         if thread_messages:
             print(f"Thread messages: length {len(thread_messages)}")
-            thread_context = self.email_client.format_thread_context(thread_messages, email.id)
+            thread_context = format_thread_context(thread_messages, email.id)
         
         # Generate AI response with thread context
         response = await self.agent.query_agent(email.subject, email.body, thread_context)
