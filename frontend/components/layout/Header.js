@@ -5,7 +5,7 @@
 import { useMsal } from "@azure/msal-react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { useTheme } from "../lib/ThemeContext";
+import { useTheme } from "../../lib/ThemeContext";
 
 // Sun icon for light mode
 function SunIcon({ className }) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useTheme } from '../lib/ThemeContext';
-import { redirect_department_dict } from '../lib/constants';
+import { useTheme } from '../../lib/ThemeContext';
+import { redirect_department_dict } from '../../lib/constants';
 
 export default function ApprovalPanel({ email, route, onApprove, onReject, onRedirect }) {
   const [isEditing, setIsEditing] = useState(false);

@@ -1,5 +1,5 @@
 #This file abstracts the email preprocessing like fetching, sending to the azure client and returns the result of fetch-triage
-#TODO: add a function to check if the email is already in the approval queue or history
+
 from datetime import datetime
 from typing import AsyncGenerator, Dict, Any
 import asyncio
