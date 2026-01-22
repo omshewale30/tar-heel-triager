@@ -17,18 +17,18 @@ export default function DashboardHeader({
     } ${
       isDark ? 'border-white/10 bg-[#050B16]/60' : 'border-slate-200 bg-white/80'
     }`}>
-      <div className="max-w-screen-2xl mx-auto px-6 py-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <div className="max-w-screen-2xl mx-auto px-6 py-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
               Email Triage Dashboard
             </h2>
-            <p className={`text-base mt-2 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+            <p className={`text-sm mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               Review and approve AI-generated email responses
             </p>
           </div>
           
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={onFetchTriage}
               disabled={fetchingTriage}
