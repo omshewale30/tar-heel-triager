@@ -3,63 +3,35 @@
  * Displays processed emails from the EmailHistory table with filtering and search
  * Supports light/dark mode
  */
-import { useState, useEffect } from 'react';
-import { getEmailHistory, deleteEmailHistory } from '../../api';
+import { useState, useEffect, useCallback } from 'react';
+import Toast from '../ui/Toast';
 import { HistoryStats, HistoryFilters, HistoryList, HistoryDetail, HistoryHeader } from '.';
 import Spinner from '../ui/Spinner';
 import { useTheme, formatDate, formatTime, getStatusBadge, getRouteBadge } from '../../lib/';
+import { useEmailHistory } from '../../hooks/useEmailHistory';
 
 export default function EmailHistoryWrapper() {
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedEmail, setSelectedEmail] = useState(null);
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [mounted, setMounted] = useState(false);
+  const { history, loading, error, selectedEmail, filterStatus, searchQuery, setSelectedEmail, setFilterStatus, setSearchQuery, loadHistory, handleDelete } = useEmailHistory();
   const { isDark } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+  }, []);
 
   useEffect(() => {
     setMounted(true);
-    loadHistory();
   }, []);
 
-  const loadHistory = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await getEmailHistory();
-      if (response.ok) {
-        const data = await response.json();
-        setHistory(data);
-      } else {
-        const err = await response.json();
-        setError(err.detail || 'Failed to load email history');
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to load email history');
-    } finally {
-      setLoading(false);
-    }
+  const onDelete = async (e, emailId) => {
+    e.stopPropagation();
+    const result = await handleDelete(emailId);
+    showToast(result.message, result.success ? 'success' : 'error');
   };
 
-  const handleDelete = async (e, emailId) => {
-    e.stopPropagation();
-    try {
-      const response = await deleteEmailHistory(emailId);
-      if (response.ok) {
-        setHistory(prev => prev.filter(email => email.id !== emailId));
-        if (selectedEmail?.id === emailId) {
-          setSelectedEmail(null);
-        }
-      } else {
-        const err = await response.json();
-        setError(err.detail || 'Failed to delete email history');
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to delete email history');
-    }
-  };
+
+
 
   // Filter and search logic
   const filteredHistory = history.filter((email) => {
@@ -145,8 +117,19 @@ export default function EmailHistoryWrapper() {
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-[#050B16] text-slate-100' : 'bg-slate-50 text-slate-900' }`}>
-      {/* Background effects */}
+    <>
+      {/* Toast notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+          isDark={isDark}
+        />
+      )}
+
+      <div className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-[#050B16] text-slate-100' : 'bg-slate-50 text-slate-900' }`}>
+        {/* Background effects */}
       {isDark ? (
         <>
           <div
@@ -198,7 +181,7 @@ export default function EmailHistoryWrapper() {
                 isDark={isDark}
                 selectedEmail={selectedEmail}
                 setSelectedEmail={setSelectedEmail}
-                handleDelete={handleDelete}
+                handleDelete={onDelete}
                 getStatusBadge={(status) => getStatusBadge(status, isDark)}
                 getRouteBadge={(route) => getRouteBadge(route, isDark)}
                 formatDate={formatDate}
@@ -221,6 +204,7 @@ export default function EmailHistoryWrapper() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -6,15 +6,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useMsal } from '@azure/msal-react';
 import Head from 'next/head';
 import { useTheme } from '../lib/ThemeContext';
-import { redirect_department_dict } from '../lib/constants';
-import { 
-  approveResponse, 
-  getApprovalQueue, 
-  rejectResponse, 
-  deleteApproval, 
-  fetchTriageEmailsStream, 
-  redirectEmail 
-} from '../api';
+import { fetchTriageEmailsStream } from '../api';
+
+// Hooks
+import { useApprovalQueue } from '../hooks/useApprovalQueue';
 
 // Layout components
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -34,15 +29,25 @@ import {
 } from '../components/dashboard';
 
 function DashboardContent() {
-  // State
-  const [approvalQueue, setApprovalQueue] = useState([]);
-  const [selectedEmail, setSelectedEmail] = useState(null);
-  const [filterRoute, setFilterRoute] = useState('AI_AGENT');
+  // Approval queue hook - handles all queue state and CRUD operations
+  const {
+    approvalQueue,
+    selectedEmail,
+    filterRoute,
+    setSelectedEmail,
+    setFilterRoute,
+    loadQueue,
+    handleApprove,
+    handleReject,
+    handleRedirect,
+    handleDelete,
+  } = useApprovalQueue('AI_AGENT');
+
+  // Local UI state
   const [fetchingTriage, setFetchingTriage] = useState(false);
   const [toast, setToast] = useState(null);
   const [mounted, setMounted] = useState(false);
   const [triageProgress, setTriageProgress] = useState(null);
-  const [department, setDepartment] = useState(redirect_department_dict);
   
   // Hooks
   const { instance, accounts } = useMsal();
@@ -53,92 +58,31 @@ function DashboardContent() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    loadApprovalQueue();
-  }, [filterRoute]);
-
   // Toast helper
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
   }, []);
 
-  // Data fetching
-  const loadApprovalQueue = async () => {
-    try {
-      const response = await getApprovalQueue(instance, accounts, filterRoute);
-      if (response.ok) {
-        const data = await response.json();
-        setApprovalQueue(data);
-      }
-    } catch (error) {
-      console.error('Error fetching emails:', error);
-    }
+  // Wrapper handlers that integrate with toast notifications
+  const onApprove = async (approvalId, editedResponse) => {
+    const result = await handleApprove(approvalId, editedResponse);
+    showToast(result.message, result.success ? 'success' : 'error');
   };
 
-  // Handlers
-  const handleApprove = async (approvalId, editedResponse) => {
-    try {
-      const response = await approveResponse(approvalId, editedResponse, instance, accounts);
-      if (response.ok) {
-        showToast('Response sent successfully!', 'success');
-        loadApprovalQueue();
-        setSelectedEmail(null);
-      } else {
-        showToast('Failed to send response', 'error');
-      }
-    } catch (error) {
-      console.error('Error approving response:', error);
-      showToast('Error sending response', 'error');
-    }
+  const onReject = async (approvalId) => {
+    const result = await handleReject(approvalId);
+    showToast(result.message, result.success ? 'success' : 'error');
   };
 
-  const handleReject = async (approvalId) => {
-    try {
-      const response = await rejectResponse(approvalId);
-      if (response.ok) {
-        showToast('Email marked as rejected', 'success');
-        loadApprovalQueue();
-        setSelectedEmail(null);
-      } else {
-        showToast('Failed to mark email as rejected', 'error');
-      }
-    } catch (error) {
-      console.error('Error rejecting response:', error);
-      showToast('Error marking email as rejected', 'error');
-    }
+  const onRedirect = async (approvalId, redirectDepartmentEmail, comment) => {
+    const result = await handleRedirect(approvalId, redirectDepartmentEmail, comment);
+    showToast(result.message, result.success ? 'success' : 'error');
   };
 
-  const handleRedirect = async (approvalId, redirectDepartmentEmail, comment) => {
-    try {
-      const response = await redirectEmail(instance, accounts, approvalId, redirectDepartmentEmail, comment);
-      if (response.ok) {
-        showToast('Email redirected successfully', 'success');
-        loadApprovalQueue();
-        setSelectedEmail(null);
-      }
-    } catch (error) {
-      console.error('Error redirecting email:', error);
-      showToast('Error redirecting email', 'error');
-    }
-  };
-
-  const handleDelete = async (e, approvalId) => {
+  const onDelete = async (e, approvalId) => {
     e.stopPropagation();
-    try {
-      const response = await deleteApproval(approvalId);
-      if (response.ok) {
-        showToast('Email deleted from queue', 'success');
-        loadApprovalQueue();
-        if (selectedEmail?.id === approvalId) {
-          setSelectedEmail(null);
-        }
-      } else {
-        showToast('Failed to delete email', 'error');
-      }
-    } catch (error) {
-      console.error('Error deleting email:', error);
-      showToast('Error deleting email', 'error');
-    }
+    const result = await handleDelete(approvalId);
+    showToast(result.message, result.success ? 'success' : 'error');
   };
 
   const handleFetchTriage = async () => {
@@ -161,7 +105,7 @@ function DashboardContent() {
         });
         
         if (data.status === 'done') {
-          loadApprovalQueue();
+          loadQueue();
         }
       });
     } catch (error) {
@@ -224,7 +168,7 @@ function DashboardContent() {
               filterRoute={filterRoute}
               isDark={isDark}
               onSelect={setSelectedEmail}
-              onDelete={handleDelete}
+              onDelete={onDelete}
               onFilterChange={setFilterRoute}
             />
 
@@ -236,9 +180,9 @@ function DashboardContent() {
             <ApprovalPanelWrapper
               email={selectedEmail}
               isDark={isDark}
-              onApprove={(editedResponse) => handleApprove(selectedEmail.id, editedResponse)}
-              onReject={() => handleReject(selectedEmail.id)}
-              onRedirect={(redirectEmailAddr, comment) => handleRedirect(selectedEmail.id, redirectEmailAddr, comment)}
+              onApprove={(editedResponse) => onApprove(selectedEmail.id, editedResponse)}
+              onReject={() => onReject(selectedEmail.id)}
+              onRedirect={(redirectEmailAddr, comment) => onRedirect(selectedEmail.id, redirectEmailAddr, comment)}
             />
           </div>
         </main>

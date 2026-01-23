@@ -1,0 +1,62 @@
+frontend/
+├── api/
+│   ├── index.js                    # Re-exports all API functions
+│   ├── approval.js                 # approveResponse, rejectResponse, getApprovalQueue, deleteApproval
+│   ├── email.js                    # fetchPendingEmails, fetchTriageEmails, fetchTriageEmailsStream
+│   ├── history.js                  # getEmailHistory, deleteEmailHistory
+│   └── redirect.js                 # redirectEmail
+│
+├── components/
+│   ├── ui/                         # Reusable primitive UI components
+│   │   ├── Badge.js                # Single Badge component (currently duplicated 3x)
+│   │   ├── Spinner.js              # Single Spinner component (currently duplicated 2x)
+│   │   ├── Toast.js                # Toast notification (extract from dashboard.js)
+│   │   ├── ProgressToast.js        # Progress toast for SSE (extract from dashboard.js)
+│   │   └── index.js                # Re-export all UI components
+│   │
+│   ├── layout/                     # Layout components
+│   │   ├── Header.js               # (existing)
+│   │   ├── PageBackground.js       # Reusable background effects (extract duplicated gradients)
+│   │   ├── PageContainer.js        # Common page wrapper with background
+│   │   └── ProtectedRoute.js       # (existing)
+│   │
+│   ├── dashboard/                  # Dashboard-specific components
+│   │   ├── EmailList.js            # Email queue list with filtering
+│   │   ├── EmailPreview.js         # Middle panel email details
+│   │   ├── ApprovalPanel.js        # (existing, but cleaner)
+│   │   └── DashboardStats.js       # Pending count display
+│   │
+│   ├── history/                    # History-specific components
+│   │   ├── HistoryList.js          # Left panel with search/filter
+│   │   ├── HistoryDetail.js        # Right panel email details
+│   │   ├── HistoryStats.js         # Stats cards (total, approved, etc.)
+│   │   └── HistoryFilters.js       # Search and filter controls
+│   │
+│   └── landing/                    # Landing page components
+│       ├── HeroSection.js          # Left column hero content
+│       ├── LoginCard.js            # Right column sign-in card
+│       ├── FeatureCards.js         # AI Pipeline + Your Workflow cards
+│       └── LandingHeader.js        # Landing-specific header
+│
+├── hooks/                          # Custom React hooks
+│   ├── useApprovalQueue.js         # Queue fetching + handlers (approve, reject, redirect, delete)
+│   ├── useEmailHistory.js          # History fetching + filtering logic
+│   ├── useTriageStream.js          # SSE streaming logic
+│   ├── useToast.js                 # Toast state management
+│   └── useMounted.js               # Mounted animation helper
+│
+├── lib/
+│   ├── authConfig.js               # (existing)
+│   ├── constants.js                # (existing) - could expand with routes, status enums
+│   ├── ThemeContext.js             # (existing)
+│   ├── msalHelpers.js              # Token acquisition helpers (extract from api.js)
+│   └── formatters.js               # Date/time formatters (extract from EmailHistory)
+│
+├── pages/
+│   ├── _app.js                     # (existing - unchanged)
+│   ├── index.js                    # Landing page - now just composition
+│   ├── dashboard.js                # Dashboard page - now just composition
+│   └── history.js                  # History page - now just composition
+│
+└── styles/
+    └── globals.css                 # (existing)
