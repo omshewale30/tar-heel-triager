@@ -3,13 +3,12 @@
  * Email triage dashboard with approval workflow
  */
 import { useState, useEffect, useCallback } from 'react';
-import { useMsal } from '@azure/msal-react';
 import Head from 'next/head';
 import { useTheme } from '../lib/ThemeContext';
-import { fetchTriageEmailsStream } from '../api';
 
 // Hooks
 import { useApprovalQueue } from '../hooks/useApprovalQueue';
+import useTriageStream from '../hooks/useTriageStream';
 
 // Layout components
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -44,13 +43,11 @@ function DashboardContent() {
   } = useApprovalQueue('AI_AGENT');
 
   // Local UI state
-  const [fetchingTriage, setFetchingTriage] = useState(false);
   const [toast, setToast] = useState(null);
   const [mounted, setMounted] = useState(false);
-  const [triageProgress, setTriageProgress] = useState(null);
   
   // Hooks
-  const { instance, accounts } = useMsal();
+  const { fetchingTriage, triageProgress, setTriageProgress, handleFetchTriage } = useTriageStream(loadQueue);
   const { isDark } = useTheme();
 
   // Effects
@@ -85,36 +82,6 @@ function DashboardContent() {
     showToast(result.message, result.success ? 'success' : 'error');
   };
 
-  const handleFetchTriage = async () => {
-    setFetchingTriage(true);
-    setTriageProgress({ progress: 0, step: 'Starting...', status: 'loading', count: 0, results: null });
-    
-    try {
-      let emailCount = 0;
-      await fetchTriageEmailsStream(instance, accounts, (data) => {
-        if (data.count) {
-          emailCount = data.count;
-        }
-        
-        setTriageProgress({
-          progress: data.progress || 0,
-          step: data.step || data.message || '',
-          status: data.status || 'loading',
-          count: emailCount,
-          results: data.results || null
-        });
-        
-        if (data.status === 'done') {
-          loadQueue();
-        }
-      });
-    } catch (error) {
-      console.error('Error fetching triage emails:', error);
-      setTriageProgress({ progress: 0, step: error.message, status: 'error', count: 0, results: null });
-    } finally {
-      setFetchingTriage(false);
-    }
-  };
 
   return (
     <>
